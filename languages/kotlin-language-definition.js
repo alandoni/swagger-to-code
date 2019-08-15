@@ -17,6 +17,9 @@ class KotlinLanguageDefinition {
     get isConstructorTheNameOfTheClass() {
         return true;
     }
+    get isConstructorHeaderEnoughToDefineProperties() {
+        return true;
+    }
     get thisKeyword() {
         return "this";
     }

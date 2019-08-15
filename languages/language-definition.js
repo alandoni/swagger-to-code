@@ -9,12 +9,15 @@ class LanguageDefinition {
         return false;
     }
     get shouldConstructorDefineProperties() {
-        return false;
+        return true;
     }
     get isConstructorInClassDefinition() {
         return false;
     }
     get isConstructorTheNameOfTheClass() {
+        return false;
+    }
+    get isConstructorHeaderEnoughToDefineProperties() {
         return false;
     }
     get thisKeyword() {
@@ -42,7 +45,7 @@ class LanguageDefinition {
         return "const";
     }
     get functionKeyword() {
-        return "function";
+        return "";
     }
     get privateKeyword() {
         return "";

@@ -26,7 +26,7 @@ module.exports = class ModelClassParser {
                 enums.push(property.enumDefinition);
             });
 
-            let modelClassString = "";
+            let modelClassString = '';
             if (languageDefinition.useDataclassForModels) {
                 modelClassString = `${languageDefinition.dataClassKeyword} ${className}`;
             } else {
@@ -36,27 +36,45 @@ module.exports = class ModelClassParser {
             let methodsString = `${this.getCopyMethod(languageDefinition, className, properties)}\n\n`;
             methodsString += `${this.getIsEqualMethod(languageDefinition, className, properties)}`;
 
-            let enumsString = "";
+            let enumsString = '';
             if (enums && enums.length > 0) {
                 enumsString = `\n\n${this.parseEnums(languageDefinition, enums)}`;
             }
 
             let propertiesString = this.parseProperties(languageDefinition, properties);
-            let constructor = `(\n${propertiesString}\n)`;
+            let constructorString = this.getConstructor(languageDefinition, className, properties);
 
             if (languageDefinition.shouldConstructorDefineProperties) {
-                propertiesString = "";
+                propertiesString = '';
             }
 
             if (languageDefinition.isConstructorInClassDefinition) {
-                modelClassString = `${modelClassString}${constructor} {\n${methodsString}${enumsString}\n}`;
+                modelClassString = `${modelClassString}${constructorString} {\n${methodsString}${enumsString}\n}`;
             } else {
-                const classContentString = `${propertiesString}\n${methodsString}${enumsString}`;
+                const classContentString = `${propertiesString}\n${constructorString}\n${methodsString}${enumsString}`;
                 modelClassString = `${modelClassString} {\n${classContentString}\n}`;
             }
             console.log(modelClassString);
             return modelClassString;
         });
+    }
+
+    getConstructor(languageDefinition, className, properties) {
+        let constructorString = '';
+        if (languageDefinition.shouldConstructorDefineProperties) {
+            if (languageDefinition.isConstructorHeaderEnoughToDefineProperties) {
+                const propertiesString = this.parseProperties(languageDefinition, properties);
+                constructorString += `(\n${propertiesString}\n)`;
+            } else {
+                constructorString += ModelClassParser.createFunctionHeader(languageDefinition, languageDefinition.constructKeyword, 
+                    className, ModelClassParser.propertiesAsParameter(languageDefinition, properties));
+                properties.map((property, index, array) => {
+                    constructorString += `\t\t${languageDefinition.thisKeyword}.${property.name} = ${property.name};\n`;
+                });
+                constructorString += '\t}\n'
+            }
+        }
+        return constructorString;
     }
 
     getProperties(languageDefinition, properties) {
@@ -75,7 +93,7 @@ module.exports = class ModelClassParser {
     }
 
     parseProperties(languageDefinition, properties) {
-        let propertiesString = "";
+        let propertiesString = '';
         properties.map((property, index, array) => {
             let propertyString = `\t${languageDefinition.propertyKeyword} `;
             if (languageDefinition.isTypesafeLanguage) {
@@ -157,7 +175,7 @@ module.exports = class ModelClassParser {
 
     getIsEqualMethod(languageDefinition, className, properties) {
         let functionString = ModelClassParser.createFunctionHeader(languageDefinition, 'isEqual', languageDefinition.booleanKeyword, 
-            `obj ${languageDefinition.propertyTypeSeparator} ${languageDefinition.anyTypeKeyword}`);
+            ModelClassParser.propertiesAsParameter(languageDefinition, [new Property('obj', languageDefinition.anyTypeKeyword)]));
 
         if (languageDefinition.shouldCompareToNull) {
             functionString += `\t\tif (${languageDefinition.simpleComparison('obj', languageDefinition.nullKeyword)}) {\n`;
@@ -189,8 +207,28 @@ module.exports = class ModelClassParser {
         return functionString;
     }
 
-    static createFunctionHeader(languageDefinition, functionName, returnType, args = "") {
-        let functionString = `\t${languageDefinition.functionKeyword} ${functionName}(${args})`;
+    static propertiesAsParameter(languageDefinition, arrayOfProperties) {
+        let parameters = '';
+        arrayOfProperties.map((property, index, array) => {
+            parameters += property.name;
+            
+            if (languageDefinition.isTypesafeLanguage) {
+                ` ${languageDefinition.propertyTypeSeparator} ${property.type}`;
+            }
+            if (index < array.length - 1) {
+                parameters += ', ';
+            }
+        });
+        return parameters;
+    }
+
+    static createFunctionHeader(languageDefinition, functionName, returnType, args = '') {
+        let functionString = `\t`;
+
+        if (languageDefinition.functionKeyword.length > 0) {
+            functionString += `${languageDefinition.functionKeyword} `;
+        }
+        functionString += `${functionName}(${args})`;
         if (languageDefinition.isTypesafeLanguage) {
             functionString += ` ${languageDefinition.functionReturnTypeSeparator} ${returnType}`;
         }
@@ -199,7 +237,7 @@ module.exports = class ModelClassParser {
     }
 
     parseEnums(languageDefinition, enums) {
-        let enumString = "";
+        let enumString = '';
         enums.map((enumDefinition, index, array) => {
             enumString += `\t${languageDefinition.enumKeyword} ${enumDefinition.name} {\n`;
             enumDefinition.values.map((value, index, array) => {

@@ -50,6 +50,15 @@ class KotlinLanguageDefinition {
     get returnKeyword() {
         return "return";
     }
+    get nullKeyword() {
+        return "null";
+    }
+    get shouldCompareToNull() {
+        return true;
+    }
+    get anyTypeKeyword() {
+        return "Any";
+    }
     get intKeyword() {
         return "Int";
     }
@@ -62,11 +71,20 @@ class KotlinLanguageDefinition {
     get booleanKeyword() {
         return "Boolean";
     }
+    get falseKeyword() {
+        return "false";
+    }
+    get trueKeyword() {
+        return "true";
+    }
     get arrayKeyword() {
         return "Array";
     }
     get mapKeyword() {
         return "Map";
+    }
+    get enumKeyword() {
+        return "enum class";
     }
     get functionReturnTypeSeparator() {
         return ":";
@@ -76,6 +94,31 @@ class KotlinLanguageDefinition {
     }
     get isPropertyTypeAfterName() {
         return true;
+    }
+
+    compareTypeOfObjectsMethod(var1, var2, negative) {
+        let equal = "==";
+        if (negative) {
+            equal = "!=";
+        }
+        return `${var1}::class ${equal} ${var2}::class`;
+    }
+
+    equalMethod(var1, var2, negative) {
+        const equals = `${var1}.equals(${var2})`;
+        if (negative) {
+            return `!${equals}`;
+        } else {
+            return equals;
+        }
+    }
+
+    simpleComparison(var1, var2, negative) {
+        let equal = "==";
+        if (negative) {
+            equal = "!=";
+        }
+        return `${var1} ${equal} ${var2}`;
     }
 }
 

@@ -50,6 +50,15 @@ class LanguageDefinition {
     get returnKeyword() {
         return "return";
     }
+    get nullKeyword() {
+        return "null";
+    }
+    get shouldCompareToNull() {
+        return false;
+    }
+    get anyTypeKeyword() {
+        return "";
+    }
     get intKeyword() {
         return "";
     }
@@ -62,11 +71,20 @@ class LanguageDefinition {
     get booleanKeyword() {
         return "";
     }
+    get falseKeyword() {
+        return "false";
+    }
+    get trueKeyword() {
+        return "true";
+    }
     get arrayKeyword() {
         return "";
     }
     get mapKeyword() {
         return "";
+    }
+    get enumKeyword() {
+        return "class";
     }
     get functionReturnTypeSeparator() {
         return "";
@@ -76,6 +94,27 @@ class LanguageDefinition {
     }
     get isPropertyTypeAfterName() {
         return false;
+    }
+    
+
+    compareTypeOfObjectsMethod(var1, var2) {
+        return "";
+    }
+
+    equalMethod(var1, var2, negative) {
+        let equal = "===";
+        if (negative) {
+            equal = "!==";
+        }
+        return `${var1} ${equal} ${var2}`;
+    }
+
+    simpleComparison(var1, var2, negative) {
+        let equal = "==";
+        if (negative) {
+            equal = "!=";
+        }
+        return `${var1} ${equal} ${var2}`;
     }
 }
 

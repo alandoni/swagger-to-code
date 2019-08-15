@@ -1,8 +1,8 @@
 const YAML = require('yaml');
 const fs = require('fs');
 
-const acceptedLanguages = require('./languages.js');
-const Parser = require('./language-parser.js');
+const acceptedLanguages = require('./languages/languages');
+const Parser = require('./parser/language-parser');
 
 function validateLanguage(language) {
     return acceptedLanguages.indexOf(language) > -1;

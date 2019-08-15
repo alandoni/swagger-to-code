@@ -1,70 +1,82 @@
-class KotlinLanguageDefinition {
+class LanguageDefinition {
     get isTypesafeLanguage() {
-        return true;
+        return false;
     }
     get hasNullCheckInProperty() {
-        return true;
+        return false;
     }
     get useDataclassForModels() {
-        return true;
+        return false;
     }
     get shouldConstructorDefineProperties() {
-        return true;
+        return false;
     }
     get isConstructorInClassDefinition() {
-        return true;
+        return false;
     }
     get isConstructorTheNameOfTheClass() {
-        return true;
+        return false;
+    }
+    get thisKeyword() {
+        return "this";
     }
     get constructKeyword() {
         return "constructor";
+    }
+    get newKeyword() {
+        return "new";
     }
     get classKeyword() {
         return "class";
     }
     get dataClassKeyword() {
-        return "data class"
+        return ""
     }
     get propertyKeyword() {
-        return "val";
+        return "let";
+    }
+    get variableKeyword() {
+        return "let";
+    }
+    get constKeyword() {
+        return "const";
     }
     get functionKeyword() {
-        return "fun";
+        return "function";
     }
     get privateKeyword() {
-        return "private";
+        return "";
     }
     get returnKeyword() {
         return "return";
     }
     get intKeyword() {
-        return "Int";
+        return "";
     }
     get numberKeyword() {
-        return "Double";
+        return "";
     }
     get stringKeyword() {
-        return "String";
+        return "";
     }
     get booleanKeyword() {
-        return "Boolean";
+        return "";
     }
     get arrayKeyword() {
-        return "Array";
+        return "";
     }
     get mapKeyword() {
-        return "Map";
+        return "";
     }
     get functionReturnTypeSeparator() {
-        return ":";
+        return "";
     }
     get propertyTypeSeparator() {
-        return ":";
+        return "";
     }
     get isPropertyTypeAfterName() {
-        return true;
+        return false;
     }
 }
 
-module.exports = KotlinLanguageDefinition;
+module.exports = LanguageDefinition;

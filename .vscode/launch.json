@@ -8,8 +8,8 @@
       "type": "node",
       "request": "launch",
       "name": "Launch Program",
-      "program": "${workspaceFolder}\\index.js",
-      "args": ["KOTLIN", "C:\\Users\\Alan\\Documents\\swagger.yaml"]
+      "program": "${workspaceFolder}/index.js",
+      "args": ["KOTLIN", "/Users/alanquintiliano/Documents/swagger.yaml"]
     }
   ]
 }

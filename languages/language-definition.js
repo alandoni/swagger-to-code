@@ -98,6 +98,9 @@ class LanguageDefinition {
     get isPropertyTypeAfterName() {
         return false;
     }
+    get stringQuote() {
+        return "'";
+    }
     
 
     compareTypeOfObjectsMethod(var1, var2) {

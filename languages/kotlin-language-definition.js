@@ -98,6 +98,9 @@ class KotlinLanguageDefinition {
     get isPropertyTypeAfterName() {
         return true;
     }
+    get stringQuote() {
+        return "\"";
+    }
 
     compareTypeOfObjectsMethod(var1, var2, negative) {
         let equal = "==";

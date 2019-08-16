@@ -9,6 +9,7 @@ const LanguageDefinition = require('../languages/language-definition');
 const KotlinLanguageDefinition = require('../languages/kotlin-language-definition');
 
 const ModelClassParser = require('./model-class-parser');
+const DatabaseTableSchemaClassParser = require('./database-table-schema-class-parser');
 
 class LanguageDefinitionFactory {
     static makeLanguageDefinition(language) {
@@ -28,9 +29,13 @@ class LanguageParser {
     parse(object, language) {
         const languageDefinition = LanguageDefinitionFactory.makeLanguageDefinition(language);
         const classDefinitions = this.transformDefitionsInClassDefinition(languageDefinition, object.definitions);
-        const parser = new ModelClassParser();
-        const models = classDefinitions.map((classDefinition) => {
-            return parser.parse(languageDefinition, classDefinition);
+        const modelParser = new ModelClassParser();
+        const tableSchemaParser = new DatabaseTableSchemaClassParser();
+        const classes = classDefinitions.map((classDefinition) => {
+            return {
+                models: modelParser.parse(languageDefinition, classDefinition), 
+                tableClasses: tableSchemaParser.parse(languageDefinition, classDefinition)
+            };
         });
     }
 

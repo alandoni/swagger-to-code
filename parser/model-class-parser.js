@@ -30,7 +30,7 @@ module.exports = class ModelClassParser {
             const classContentString = `${propertiesString}\n${constructorString}\n${methodsString}${enumsString}`;
             modelClassString = `${modelClassString} {\n${classContentString}\n}`;
         }
-        console.log(modelClassString);
+        //console.log(modelClassString);
         return modelClassString;
     }
 
@@ -55,23 +55,8 @@ module.exports = class ModelClassParser {
     parseProperties(languageDefinition, properties) {
         let propertiesString = '';
         properties.map((property, index, array) => {
-            let propertyString = `\t${languageDefinition.propertyKeyword} `;
-            if (languageDefinition.isTypesafeLanguage) {
-                if (languageDefinition.isPropertyTypeAfterName) {
-                    propertyString += `${property.name} ${languageDefinition.propertyTypeSeparator} ${property.type}`;
-                } else {
-                    propertyString += `${property.type} ${languageDefinition.propertyTypeSeparator} ${property.name}`;
-                }
-            } else {
-                propertyString += `${property.name}`;
-            }
-            if (languageDefinition.shouldConstructorDefineProperties) {
-                if (index < array.length - 1) {
-                    propertyString += ",\n"
-                }
-            } else {
-                propertyString += ";\n"
-            }
+            let propertyString = `\t${ModelClassParser.getProperty(languageDefinition, property.name, property.type, null,
+                languageDefinition.shouldConstructorDefineProperties, index < array.length - 1)}`;
             propertiesString +=`${propertyString}`;
         });
         return propertiesString;
@@ -130,6 +115,38 @@ module.exports = class ModelClassParser {
 
         functionString += `\t\t${languageDefinition.returnKeyword} ${languageDefinition.trueKeyword};\n\t}`;
         return functionString;
+    }
+
+    static getProperty(languageDefinition, name, type, value = null, isPrivate = false, shouldConstructorDefineProperties = false, isLastProperty = false) {
+        let propertyString = '';
+        if (isPrivate) {
+            propertyString += `${languageDefinition.privateKeyword} `;
+        }
+        propertyString += `${languageDefinition.propertyKeyword} `;
+        if (languageDefinition.isTypesafeLanguage) {
+            if (languageDefinition.isPropertyTypeAfterName) {
+                propertyString += `${name} ${languageDefinition.propertyTypeSeparator} ${type}`;
+            } else {
+                propertyString += `${type} ${languageDefinition.propertyTypeSeparator} ${name}`;
+            }
+        } else {
+            propertyString += `${name}`;
+        }
+        if (value) {
+            if (type === languageDefinition.stringKeyword) {
+                propertyString += ` = ${languageDefinition.stringQuote}${value}${languageDefinition.stringQuote}`;
+            } else {
+                propertyString += ` = ${value}`;
+            }
+        }
+        if (shouldConstructorDefineProperties) {
+            if (!isLastProperty) {
+                propertyString += ",\n";
+            }
+        } else {
+            propertyString += ";\n";
+        }
+        return propertyString;
     }
 
     static propertiesAsParameter(languageDefinition, arrayOfProperties) {

@@ -3,7 +3,7 @@ const StringUtils = require('../string-utils');
 class KotlinLanguageDefinition {
     importDeclarations(imports) {
         return imports.map((importFile) => {
-            return `import ${importFile.file};`;
+            return `import ${importFile};`;
         }).join('\n');
     }
 
@@ -74,7 +74,11 @@ ${body}
     }
 
     methodCall(caller, methodName, parameterValues) {
-        return `${caller}.${methodName}(${this.printValues(parameterValues)})`;
+        let callerString = '';
+        if (caller) {
+            callerString = `${caller}.`;
+        }
+        return `${callerString}${methodName}(${this.printValues(parameterValues)})`;
     }
 
     variableDeclaration(declareType, type, name, defaultValue) {
@@ -118,7 +122,7 @@ ${body}
     }
 
     constructObject(type, parameters) {
-        return this.methodCall(type, parameters);
+        return this.methodCall(null, type, parameters);
     }
 
     ifNullStatement(object, body) {

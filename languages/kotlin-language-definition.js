@@ -1,63 +1,153 @@
+const StringUtils = require('../string-utils');
+
 class KotlinLanguageDefinition {
-    get isTypesafeLanguage() {
-        return true;
+    importDeclarations(imports) {
+        return imports.map((importFile) => {
+            return `import ${importFile.file};`;
+        }).join('\n');
     }
-    get hasNullCheckInProperty() {
-        return true;
+
+    classDeclaration(className, inheritsFrom, body, isDataClass, properties) {
+        let classType = 'class';
+        if (isDataClass) {
+            classType = 'data class';
+        }
+        let inherits = '';
+        if (inheritsFrom) {
+            inherits = ` : ${inheritsFrom}`;
+        }
+        let constructor = '';
+        if (properties) {
+            constructor = this.constructorProperties(properties);
+        }
+        return `${classType} ${className}${constructor}${inherits} {\n${body}\n}`;
     }
+
+    parameterDeclaration(parameterName, type) {
+        return `${type} ${parameterName}`;
+    }
+
+    methodDeclaration(methodName, parameters, returnType, body) {
+        let returnString = '';
+        if (returnType) {
+            returnString = ` : ${returnType}`;
+        }
+
+        return `fun ${methodName}(${this.printParametersNamesWithTypes(parameters)})${returnString} {
+${body}
+\t}`;
+    }
+
+    printParametersNamesWithTypes(parameters, declareKeyword) {
+        if (!parameters || parameters.length == 0) {
+            return '';
+        }
+        return parameters.map((parameter) => {
+            let declareString = ''
+            if (declareKeyword) {
+                declareString = `${declareKeyword} `;
+            }
+            return `${declareString}${parameter.name} : ${parameter.type}`;
+        }).join(',\n\t\t');
+    }
+
+    printValues(values) {
+        if (!values || values.length == 0) {
+            return '';
+        }
+        return values.map((value) => {
+            return `${value}`;
+        }).join(', ');
+    }
+
+    fieldDeclaration(visibility, name, type, defaultValue) {
+        let visibilityString = '';
+        if (visibility.length > 0) {
+            visibilityString = `${visibility} `;
+        }
+        let field = `${visibilityString}val ${name} : ${type}`;
+        if (defaultValue) {
+            field += ` = ${defaultValue}`;
+        }
+        field += ';';
+        return field;
+    }
+
+    methodCall(caller, methodName, parameterValues) {
+        return `${caller}.${methodName}(${this.printValues(parameterValues)})`;
+    }
+
+    variableDeclaration(declareType, type, name, defaultValue) {
+        let variable = `${declareType} ${name} : ${type}`;
+        if (defaultValue) {
+            variable += ` = ${defaultValue}`;
+        }
+        return variable +=';';
+    }
+
+    returnDeclaration(value) {
+        return `return ${value};`;
+    }
+
+    constructorProperties(properties) {
+        return `(${this.printParametersNamesWithTypes(properties, 'val')})`;
+    }
+
+    constructorDeclaration(className, parameters, returnType, body, isDataClass) {
+        return `${className}${this.constructorProperties(parameters)} {
+    ${body}
+\t}`;
+    }
+
+    enumDeclaration(enumName, values) {
+        return `\tenum class ${enumName} {
+    ${values.map((value) => {
+        return `\t\t${value}`;
+    }).join(',\n')}
+\t}`;
+    }
+
+    ifStatement(condition, body) {
+        return `if (${condition}) {
+    ${body}
+\t\t}`;
+    }
+
+    assignment(name1, name2) {
+        return `${name1} = ${name2};`;
+    }
+
+    constructObject(type, parameters) {
+        return this.methodCall(type, parameters);
+    }
+
+    ifNullStatement(object, body) {
+        return `if (${object} == ${this.nullKeyword}) {
+${body}
+\t\t}`;
+    }
+
+    stringDeclaration(content) {
+        return `"${content}"`;
+    }
+
     get useDataclassForModels() {
         return true;
     }
-    get shouldConstructorDefineProperties() {
-        return true;
-    }
-    get isConstructorInClassDefinition() {
-        return true;
-    }
-    get isConstructorTheNameOfTheClass() {
-        return true;
-    }
-    get isConstructorHeaderEnoughToDefineProperties() {
+    get isTypesafeLanguage() {
         return true;
     }
     get thisKeyword() {
         return "this";
     }
-    get constructKeyword() {
-        return "constructor";
-    }
-    get newKeyword() {
-        return "";
-    }
-    get classKeyword() {
-        return "class";
-    }
-    get dataClassKeyword() {
-        return "data class"
-    }
-    get propertyKeyword() {
+    get constKeyword() {
         return "val";
     }
     get variableKeyword() {
         return "var";
     }
-    get constKeyword() {
-        return "val";
-    }
-    get functionKeyword() {
-        return "fun";
-    }
-    get privateKeyword() {
-        return "private";
-    }
-    get returnKeyword() {
-        return "return";
-    }
     get nullKeyword() {
         return "null";
-    }
-    get shouldCompareToNull() {
-        return true;
     }
     get anyTypeKeyword() {
         return "Any";
@@ -86,20 +176,14 @@ class KotlinLanguageDefinition {
     get mapKeyword() {
         return "Map";
     }
-    get enumKeyword() {
-        return "enum class";
+    get publicKeyword() {
+        return "public";
     }
-    get functionReturnTypeSeparator() {
-        return ":";
+    get privateKeyword() {
+        return "private";
     }
-    get propertyTypeSeparator() {
-        return ":";
-    }
-    get isPropertyTypeAfterName() {
-        return true;
-    }
-    get stringQuote() {
-        return "\"";
+    get stringReplacement() {
+        return "%s";
     }
 
     compareTypeOfObjectsMethod(var1, var2, negative) {

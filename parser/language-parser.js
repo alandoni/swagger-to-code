@@ -11,6 +11,8 @@ const KotlinLanguageDefinition = require('../languages/kotlin-language-definitio
 const ModelClassParser = require('./model-class-parser');
 const DatabaseTableSchemaClassParser = require('./database-table-schema-class-parser');
 
+const SqliteLanguageDefinition = require('../languages/sqlite-language-definition');
+
 class LanguageDefinitionFactory {
     static makeLanguageDefinition(language) {
         if (language === KOTLIN) {
@@ -31,10 +33,11 @@ class LanguageParser {
         const classDefinitions = this.transformDefitionsInClassDefinition(languageDefinition, object.definitions);
         const modelParser = new ModelClassParser();
         const tableSchemaParser = new DatabaseTableSchemaClassParser();
+        const sqliteLanguageDefinition = new SqliteLanguageDefinition();
         const classes = classDefinitions.map((classDefinition) => {
             return {
                 models: modelParser.parse(languageDefinition, classDefinition), 
-                tableClasses: tableSchemaParser.parse(languageDefinition, classDefinition)
+                tableClasses: tableSchemaParser.parse(languageDefinition, sqliteLanguageDefinition, classDefinition)
             };
         });
     }
@@ -42,7 +45,7 @@ class LanguageParser {
     transformDefitionsInClassDefinition(languageDefinition, definitions) {
         return Object.entries(definitions).map((definition) => {
             const className = definition[0];
-            const properties = this.getProperties(languageDefinition, definition[1].properties);
+            const properties = this.getProperties(languageDefinition, definition[1].properties, definition[1].required);
 
             const enums = [];
 
@@ -56,7 +59,7 @@ class LanguageParser {
         });
     }
 
-    getProperties(languageDefinition, properties) {
+    getProperties(languageDefinition, properties, requiredProperties) {
         return Object.entries(properties).map((property) => {
             let [propertyName, propertyType] = this.getProperty(languageDefinition, property);
 
@@ -67,7 +70,12 @@ class LanguageParser {
                 enumDefinition = new EnumDefinition(enumName, property[1].enum);
             }
 
-            return new PropertyDefinition(propertyName, propertyType, enumDefinition);
+            let required = false;
+            if (requiredProperties && requiredProperties.indexOf(propertyName) > -1) {
+                required = true;
+            }
+
+            return new PropertyDefinition(propertyName, propertyType, enumDefinition, required);
         });
     }
 

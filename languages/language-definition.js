@@ -1,63 +1,118 @@
+const StringUtils = require('../string-utils');
+
 class LanguageDefinition {
-    get isTypesafeLanguage() {
-        return false;
+    importDeclarations(imports) {
+        return imports.map((importFile) => {
+            return `const ${importFile.name} = require(${importFile.file});`;
+        }).join('\n');
     }
-    get hasNullCheckInProperty() {
-        return false;
+
+    classDeclaration(className, inheritsFrom, body, isDataClass) {
+        return `class ${className}: ${inheritsFrom} {\n${body}\n}`;
     }
+
+    parameterDeclaration(parameterName, type) {
+        return parameterName;
+    }
+
+    methodDeclaration(methodName, parameters, returnType, body) {
+        return `${methodName}(${this.printParametersNames(parameters)}) {
+    ${body}
+    }`;
+    }
+
+    printParametersNames(parameters) {
+        if (!parameters || parameters.length == 0) {
+            return '';
+        }
+        return parameters.map((parameter) => {
+            return parameter.name;
+        }).join(', ');
+    }
+
+    fieldDeclaration(visibility, name, type, defaultValue) {
+        let field = `get ${name}() {\n`;
+        if (defaultValue) {
+            field += `\treturn ${defaultValue};`;
+        }
+        field += '\n}';
+        return field;
+    }
+
+    methodCall(caller, methodName, parameterValues) {
+        return `${caller}.${methodName}(${this.printParametersNames(parameterValues)})`;
+    }
+
+    variableDeclaration(declareType, type, name, defaultValue) {
+        let variable = `${declareType} ${name}`;
+        if (defaultValue) {
+            variable += ` = ${defaultValue}`;
+        }
+        return variable +=';';
+    }
+
+    returnDeclaration(value) {
+        return `return ${value};`;
+    }
+
+    constructorDeclaration(className, parameters, returnType, body, isDataClass) {
+        return `contructor(${this.printParametersNames(parameters)}) {
+    ${this.parameters.map((value) => {
+        return `this.${value.name} = ${value.name};`;
+    }).join('\n')}
+    ${body}
+    }`;
+    }
+
+    enumDeclaration(enumName, values) {
+        return `class ${enumName} {
+    ${values.map((value, index) => {
+        return `${StringUtils.splitNameWithUnderlines(value).toUpperCase()} = ${index}`;
+    })}
+    }`;
+    }
+
+    ifStatement(condition, body) {
+        return `if (${condition}) {
+    ${body}
+    }`;
+    }
+
+    ifNullStatement(object, body) {
+        return `if (${object}) {
+    ${body}
+}`;
+    }
+
+    assignment(name1, name2) {
+        return `${name1} = ${name2};`;
+    }
+
+    constructObject(type, parameters) {
+        return `new ${this.methodCall(type, parameters)})`;
+    }
+
+    stringDeclaration(content) {
+        return `'${content}'`;
+    }
+
     get useDataclassForModels() {
         return false;
     }
-    get shouldConstructorDefineProperties() {
-        return true;
-    }
-    get isConstructorInClassDefinition() {
-        return false;
-    }
-    get isConstructorTheNameOfTheClass() {
-        return false;
-    }
-    get isConstructorHeaderEnoughToDefineProperties() {
+    get isTypesafeLanguage() {
         return false;
     }
     get thisKeyword() {
         return "this";
     }
-    get constructKeyword() {
-        return "constructor";
-    }
-    get newKeyword() {
-        return "new";
-    }
-    get classKeyword() {
-        return "class";
-    }
-    get dataClassKeyword() {
-        return ""
-    }
-    get propertyKeyword() {
-        return "let";
+    get constKeyword() {
+        return "val";
     }
     get variableKeyword() {
-        return "let";
-    }
-    get constKeyword() {
-        return "const";
-    }
-    get functionKeyword() {
-        return "";
-    }
-    get privateKeyword() {
-        return "";
-    }
-    get returnKeyword() {
-        return "return";
+        return "var";
     }
     get nullKeyword() {
         return "null";
-    }
-    get shouldCompareToNull() {
-        return false;
     }
     get anyTypeKeyword() {
         return "";
@@ -86,22 +141,15 @@ class LanguageDefinition {
     get mapKeyword() {
         return "";
     }
-    get enumKeyword() {
-        return "class";
-    }
-    get functionReturnTypeSeparator() {
+    get publicKeyword() {
         return "";
     }
-    get propertyTypeSeparator() {
+    get privateKeyword() {
         return "";
     }
-    get isPropertyTypeAfterName() {
-        return false;
+    get stringReplacement() {
+        return "%s";
     }
-    get stringQuote() {
-        return "'";
-    }
-    
 
     compareTypeOfObjectsMethod(var1, var2) {
         return "";

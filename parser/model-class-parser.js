@@ -2,197 +2,101 @@ const PropertyDefinition = require("./definitions/property-definition");
 
 module.exports = class ModelClassParser {
     parse(languageDefinition, classDefinition) {
-        let modelClassString = '';
-        if (languageDefinition.useDataclassForModels) {
-            modelClassString = `${languageDefinition.dataClassKeyword} ${classDefinition.name}`;
-        } else {
-            modelClassString = `${languageDefinition.classKeyword} ${classDefinition.name}`;
-        }
+        let modelClassString = ''; //languageDefinition.importDeclarations(imports);
 
-        let methodsString = `${this.getCopyMethod(languageDefinition, classDefinition.name, classDefinition.properties)}\n\n`;
-        methodsString += `${this.getIsEqualMethod(languageDefinition, classDefinition.name, classDefinition.properties)}`;
+        let classBody = '';
+
+        const constructor = this.parseConstructor(languageDefinition, classDefinition.name, classDefinition.properties);
+        let methods = [this.getCopyMethod(languageDefinition, classDefinition.name, classDefinition.properties),
+            this.getIsEqualMethod(languageDefinition, classDefinition.name, classDefinition.properties)];
 
         let enumsString = '';
         if (classDefinition.enums && classDefinition.enums.length > 0) {
-            enumsString = `\n\n${this.parseEnums(languageDefinition, classDefinition.enums)}`;
+            enumsString = this.parseEnums(languageDefinition, classDefinition.enums);
         }
 
-        let propertiesString = this.parseProperties(languageDefinition, classDefinition.properties);
-        let constructorString = this.parseConstructor(languageDefinition, classDefinition.name, classDefinition.properties);
-
-        if (languageDefinition.shouldConstructorDefineProperties) {
-            propertiesString = '';
-        }
-
-        if (languageDefinition.isConstructorInClassDefinition) {
-            modelClassString = `${modelClassString}${constructorString} {\n${methodsString}${enumsString}\n}`;
+        let propertiesString = '';
+        if (!languageDefinition.useDataclassForModels) {
+            propertiesString = this.parseProperties(languageDefinition, classDefinition.properties);
+            classBody += `${propertiesString}\n\n${methods.join('\n\n')}`;
         } else {
-            const classContentString = `${propertiesString}\n${constructorString}\n${methodsString}${enumsString}`;
-            modelClassString = `${modelClassString} {\n${classContentString}\n}`;
+            classBody = `\n${methods.join('\n\n')}`;
         }
-        //console.log(modelClassString);
+
+        if (enumsString.length > 0) {
+            classBody += `\n\n${enumsString}`;
+        }
+
+        if (!languageDefinition.useDataclassForModels) {
+            methods.splice(0, 0, constructor)
+            modelClassString += languageDefinition.classDeclaration(classDefinition.name, null, classBody);
+        } else {
+            modelClassString += languageDefinition.classDeclaration(classDefinition.name, null, classBody, true, classDefinition.properties);
+        }
+
+        console.log(modelClassString);
         return modelClassString;
     }
 
     parseConstructor(languageDefinition, className, properties) {
-        let constructorString = '';
-        if (languageDefinition.shouldConstructorDefineProperties) {
-            if (languageDefinition.isConstructorHeaderEnoughToDefineProperties) {
-                const propertiesString = this.parseProperties(languageDefinition, properties);
-                constructorString += `(\n${propertiesString}\n)`;
-            } else {
-                constructorString += ModelClassParser.createFunctionHeader(languageDefinition, languageDefinition.constructKeyword, 
-                    className, ModelClassParser.propertiesAsParameter(languageDefinition, properties));
-                properties.map((property, index, array) => {
-                    constructorString += `\t\t${languageDefinition.thisKeyword}.${property.name} = ${property.name};\n`;
-                });
-                constructorString += '\t}\n'
-            }
-        }
-        return constructorString;
+        return `\t${languageDefinition.constructorDeclaration(className, properties, className, '', languageDefinition.useDataclassForModels)}`;
     }
 
     parseProperties(languageDefinition, properties) {
-        let propertiesString = '';
-        properties.map((property, index, array) => {
-            let propertyString = `\t${ModelClassParser.getProperty(languageDefinition, property.name, property.type, null,
-                languageDefinition.shouldConstructorDefineProperties, index < array.length - 1)}`;
-            propertiesString +=`${propertyString}`;
-        });
-        return propertiesString;
+        return properties.map((property) => {
+            return `\t${ModelClassParser.getProperty(languageDefinition, property.name, property.type, null)}`;
+        }).join('\n');
     }
 
     getCopyMethod(languageDefinition, className, properties) {
-        let functionString = ModelClassParser.createFunctionHeader(languageDefinition, 'copy', className);
-        functionString += `\t\t${languageDefinition.constKeyword} newObject`;
-        if (languageDefinition.isTypesafeLanguage) {
-            functionString += ` ${languageDefinition.propertyTypeSeparator} ${className}`;
-        }
-
-        functionString += ' = ';
+        let body = `\t\t${languageDefinition.variableDeclaration(languageDefinition.constKeyword, className, 'newObject', `${languageDefinition.constructObject(className)}`)}\n`;
         
-        if (languageDefinition.newKeyword.length > 0) {
-            functionString += `${languageDefinition.newKeyword} `;
-        }
-        functionString += `${className}();\n`;
+        body += properties.map((property) => {
+            return `\t\t${languageDefinition.assignment(`newObject.${property.name}`, `${languageDefinition.thisKeyword}.${property.name}`)}`;
+        }).join('\n');
+        body += `\n\t\t${languageDefinition.returnDeclaration('newObject')}`;
 
-        properties.map((property) => {
-            functionString += `\t\tnewObject.${property.name} = ${languageDefinition.thisKeyword}.${property.name};\n`
-        });
-        functionString += `\t\t${languageDefinition.returnKeyword} newObject;\n\t}`;
-        return functionString;
+        return `\t${languageDefinition.methodDeclaration('copy', null, null, body)}`;
     }
 
     getIsEqualMethod(languageDefinition, className, properties) {
-        let functionString = ModelClassParser.createFunctionHeader(languageDefinition, 'isEqual', languageDefinition.booleanKeyword, 
-            ModelClassParser.propertiesAsParameter(languageDefinition, [new PropertyDefinition('obj', languageDefinition.anyTypeKeyword)]));
-
-        if (languageDefinition.shouldCompareToNull) {
-            functionString += `\t\tif (${languageDefinition.simpleComparison('obj', languageDefinition.nullKeyword)}) {\n`;
-        } else {
-            functionString += `\t\tif (!obj) {\n`;
-        }
-        functionString += `\t\t\treturn ${languageDefinition.falseKeyword}\n\t\t}\n`;
+        const returnFalse = `\t\t\t${languageDefinition.returnDeclaration(languageDefinition.falseKeyword)}`;
+        let functionString = `\t\t${languageDefinition.ifNullStatement('obj', returnFalse)}\n`;
 
         if (languageDefinition.isTypesafeLanguage) {
-            functionString += `\t\tif (${languageDefinition.compareTypeOfObjectsMethod(languageDefinition.thisKeyword, 'obj', true)}) {\n`;
-            functionString += `\t\t\treturn ${languageDefinition.falseKeyword}\n\t\t}\n`;
+            functionString += `\t\t${languageDefinition.ifStatement(
+                languageDefinition.compareTypeOfObjectsMethod(languageDefinition.thisKeyword, 'obj', true), returnFalse)}\n`;
         }
 
-        properties.map((property) => {
+        functionString += properties.map((property) => {
             switch (property.type) {
                 case languageDefinition.intKeyword:
                 case languageDefinition.numberKeyword:
                 case languageDefinition.booleanKeyword:
-                    functionString += `\t\tif (${languageDefinition.simpleComparison(`${languageDefinition.thisKeyword}.${property.name}`, `obj.${property.name}`, true)}) {\n`;
-                    break;
+                    return `\t\t${languageDefinition.ifStatement(
+                        languageDefinition.simpleComparison(`${languageDefinition.thisKeyword}.${property.name}`, `obj.${property.name}`, true), returnFalse)}`;
                 default:
-                    functionString += `\t\tif (${languageDefinition.equalMethod(`${languageDefinition.thisKeyword}.${property.name}`, `obj.${property.name}`, true)}) {\n`;
-                    break;
+                    return `\t\t${languageDefinition.ifStatement(
+                        languageDefinition.equalMethod(`${languageDefinition.thisKeyword}.${property.name}`, `obj.${property.name}`, true), returnFalse)}`;
             }
-            functionString += `\t\t\treturn ${languageDefinition.falseKeyword}\n\t\t}\n`;
-        });
+        }).join('\n');
 
-        functionString += `\t\t${languageDefinition.returnKeyword} ${languageDefinition.trueKeyword};\n\t}`;
-        return functionString;
+        functionString += `\n\t\t${languageDefinition.returnDeclaration(languageDefinition.trueKeyword)}`;
+        return `\t${languageDefinition.methodDeclaration('isEqual', [new PropertyDefinition('obj', languageDefinition.anyTypeKeyword)], 
+            languageDefinition.booleanKeyword, functionString)}`;
     }
 
-    static getProperty(languageDefinition, name, type, value = null, isPrivate = false, shouldConstructorDefineProperties = false, isLastProperty = false) {
-        let propertyString = '';
+    static getProperty(languageDefinition, name, type, value = null, isPrivate = false) {
+        let visibility = languageDefinition.publicKeyword;
         if (isPrivate) {
-            propertyString += `${languageDefinition.privateKeyword} `;
+            visibility = languageDefinition.privateKeyword;
         }
-        propertyString += `${languageDefinition.propertyKeyword} `;
-        if (languageDefinition.isTypesafeLanguage) {
-            if (languageDefinition.isPropertyTypeAfterName) {
-                propertyString += `${name} ${languageDefinition.propertyTypeSeparator} ${type}`;
-            } else {
-                propertyString += `${type} ${languageDefinition.propertyTypeSeparator} ${name}`;
-            }
-        } else {
-            propertyString += `${name}`;
-        }
-        if (value) {
-            if (type === languageDefinition.stringKeyword) {
-                propertyString += ` = ${languageDefinition.stringQuote}${value}${languageDefinition.stringQuote}`;
-            } else {
-                propertyString += ` = ${value}`;
-            }
-        }
-        if (shouldConstructorDefineProperties) {
-            if (!isLastProperty) {
-                propertyString += ",\n";
-            }
-        } else {
-            propertyString += ";\n";
-        }
-        return propertyString;
-    }
-
-    static propertiesAsParameter(languageDefinition, arrayOfProperties) {
-        let parameters = '';
-        arrayOfProperties.map((property, index, array) => {
-            parameters += property.name;
-            
-            if (languageDefinition.isTypesafeLanguage) {
-                ` ${languageDefinition.propertyTypeSeparator} ${property.type}`;
-            }
-            if (index < array.length - 1) {
-                parameters += ', ';
-            }
-        });
-        return parameters;
-    }
-
-    static createFunctionHeader(languageDefinition, functionName, returnType, args = '') {
-        let functionString = `\t`;
-
-        if (languageDefinition.functionKeyword.length > 0) {
-            functionString += `${languageDefinition.functionKeyword} `;
-        }
-        functionString += `${functionName}(${args})`;
-        if (languageDefinition.isTypesafeLanguage) {
-            functionString += ` ${languageDefinition.functionReturnTypeSeparator} ${returnType}`;
-        }
-        functionString += ' {\n';
-        return functionString;
+        return `${languageDefinition.fieldDeclaration(visibility, name, type, value)}`;
     }
 
     parseEnums(languageDefinition, enums) {
-        let enumString = '';
-        enums.map((enumDefinition, index, array) => {
-            enumString += `\t${languageDefinition.enumKeyword} ${enumDefinition.name} {\n`;
-            enumDefinition.values.map((value, index, array) => {
-                enumString += `\t\t${value}`;
-                if (index < array.length - 1) {
-                    enumString += ",\n"
-                }
-            });
-            enumString += "\n\t}";
-            if (index < array.length - 1) {
-                enumString += "\n\n";
-            }
-        });
-        return enumString;
+        return enums.map((enumDefinition) => {
+            return languageDefinition.enumDeclaration(enumDefinition.name, enumDefinition.values);
+        }).join('\n\n');
     }
 }

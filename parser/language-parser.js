@@ -46,16 +46,30 @@ class LanguageParser {
         return Object.entries(definitions).map((definition) => {
             const className = definition[0];
             const properties = this.getProperties(languageDefinition, definition[1].properties, definition[1].required);
+            
+            const dependencies = [];
 
             const enums = [];
 
             properties.filter((property) => {
+                if (property.type.indexOf(languageDefinition.arrayKeyword) > -1) {
+                    const indexOfSubtype = property.type.indexOf('<') + 1;
+                    const subtype = property.type.substr(indexOfSubtype, property.type.length - 1 - indexOfSubtype);
+                    if (languageDefinition.nativeTypes.indexOf(subtype) < 0 && !property.enumDefinition) {
+                        dependencies.push(subtype);
+                    }
+                } else {
+                    if (languageDefinition.nativeTypes.indexOf(property.type) < 0 && !property.enumDefinition) {
+                        dependencies.push(property.type);
+                    }
+                }
                 return property.enumDefinition != null;
             }).map((property) => {
                 enums.push(property.enumDefinition);
             });
 
-            return new ClassDefinition(className, properties, enums);
+
+            return new ClassDefinition(className, properties, enums, dependencies);
         });
     }
 
@@ -78,7 +92,6 @@ class LanguageParser {
             return new PropertyDefinition(propertyName, propertyType, enumDefinition, required);
         });
     }
-
 
     getProperty(languageDefinition, property) {
         return [property[0], this.getPropertyType(languageDefinition, property[1])];

@@ -8,7 +8,11 @@ class LanguageDefinition {
     }
 
     classDeclaration(className, inheritsFrom, body, isDataClass) {
-        return `class ${className}: ${inheritsFrom} {\n${body}\n}`;
+        let inherits = '';
+        if (inheritsFrom) {
+            inherits = ` extends ${inheritsFrom}`;
+        }
+        return `class ${className}${inherits} {\n${body}\n}`;
     }
 
     parameterDeclaration(parameterName, type) {
@@ -96,6 +100,14 @@ class LanguageDefinition {
         return `'${content}'`;
     }
 
+    get nativeTypes() {
+        return [this.stringKeyword,
+            this.numberKeyword,
+            this.intKeyword,
+            this.booleanKeyword,
+            this.arrayKeyword,
+            this.mapKeyword];
+    }
     get useDataclassForModels() {
         return false;
     }

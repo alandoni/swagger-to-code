@@ -5,22 +5,32 @@ const StringUtils = require('../string-utils');
 const PropertyDefinition = require('./definitions/property-definition');
 
 module.exports = class DatabaseTableSchemaClassParser {
+    constructor() {
+        this.classSufix = 'TableSchema';
+    }
+
     parse(languageDefinition, databaseLanguageDefinition, classDefinition) {
-        const imports = ['android.database.sqlite.SQLiteDatabase', 'android.database.Cursor'];
+        const imports = [ ...classDefinition.dependencies, 'android.database.sqlite.SQLiteDatabase', 'android.database.Cursor'];
         const importsString = languageDefinition.importDeclarations(imports);
-        const tableClassName = `${classDefinition.name}TableSchema`;
+        const tableClassName = `${classDefinition.name}${this.classSufix}`;
+
+        const nativeFields = classDefinition.properties.filter((value) => {
+            return languageDefinition.nativeTypes.indexOf(value.type) > -1 && value.type.indexOf(languageDefinition.arrayKeyword) < 0;
+        });
         
         let tableNameString = `\t${languageDefinition.fieldDeclaration(languageDefinition.publicKeyword, 'TABLE_NAME',  languageDefinition.stringKeyword,
             languageDefinition.stringDeclaration(StringUtils.splitNameWithUnderlines(classDefinition.name).toLowerCase()))}`;
         
-        const fieldsString = this.parseProperties(languageDefinition, classDefinition.properties);
+        const fieldsString = this.parseProperties(languageDefinition, nativeFields);
 
-        const methods = [this.createCreateTableMethod(languageDefinition, databaseLanguageDefinition, classDefinition),
-            this.createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition)].join('\n\n');
+        const methods = [this.createCreateTableMethod(languageDefinition, databaseLanguageDefinition, nativeFields),
+            this.createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields)].join('\n\n');
 
         const body = `${tableNameString}\n${fieldsString}\n\n${methods}`;
 
         const tableClass = `${importsString}\n\n${languageDefinition.classDeclaration(tableClassName, null, body)}`;
+
+        classDefinition.databaseClass = tableClassName;
 
         console.log(tableClass);
         return tableClass;
@@ -67,8 +77,8 @@ module.exports = class DatabaseTableSchemaClassParser {
         }
     }
 
-    createCreateTableMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
-        const fields = classDefinition.properties.map((value) => {
+    createCreateTableMethod(languageDefinition, databaseLanguageDefinition, nativeFields) {
+        const fields = nativeFields.map((value) => {
             const type = this.getDatabaseType(languageDefinition, databaseLanguageDefinition, value.type);
             const properties = this.getDatabaseFieldProperties(databaseLanguageDefinition, value);
 
@@ -79,7 +89,7 @@ module.exports = class DatabaseTableSchemaClassParser {
             return field;
         }).join(',\n');
 
-        const parameters = classDefinition.properties.map((value) => {
+        const parameters = nativeFields.map((value) => {
             return `\n\t\t\t${languageDefinition.thisKeyword}.${value.field}`;
         });
 
@@ -97,17 +107,23 @@ module.exports = class DatabaseTableSchemaClassParser {
             languageDefinition.voidReturnKeyword, methodString)}`;
     }
 
-    createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
+    createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields) {
         const varName = classDefinition.name.substr(0, 1).toLowerCase() + classDefinition.name.substr(1);
 
-        const parameters = classDefinition.properties.map((property) => {
+        const parameters = nativeFields.map((property) => {
             switch(property.type) {
                 case languageDefinition.numberKeyword:
                     return `\n\t\t\t${languageDefinition.methodCall('cursor', 'getDouble', [`${languageDefinition.thisKeyword}.${property.field}`])}`;
                 case languageDefinition.stringKeyword:
                     return `\n\t\t\t${languageDefinition.methodCall('cursor', 'getString',  [`${languageDefinition.thisKeyword}.${property.field}`])}`;
-                default:
+                case languageDefinition.intKeyword:
+                case languageDefinition.booleanKeyword:
                     return `\n\t\t\t${languageDefinition.methodCall('cursor', 'getInt',  [`${languageDefinition.thisKeyword}.${property.field}`])}`;
+                default:
+                    const getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.ID_FIELD`]);
+                    return `\n\t\t\t${languageDefinition.methodCall(
+                        languageDefinition.constructObject(`${property.type}${this.classSufix}`), 
+                        `selectBy${classDefinition.name}Id`, [getId])}`;
             }
         });
 

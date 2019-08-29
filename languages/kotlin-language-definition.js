@@ -1,6 +1,7 @@
-const StringUtils = require('../string-utils');
+const LanguageDefinition = require('./language-definition');
 
-class KotlinLanguageDefinition {
+
+class KotlinLanguageDefinition extends LanguageDefinition {
     importDeclarations(imports) {
         return imports.map((importFile) => {
             return `import ${importFile};`;
@@ -52,7 +53,7 @@ ${body}
     }
 
     printValues(values) {
-        if (!values || values.length == 0) {
+        if (!values || values.length === 0) {
             return '';
         }
         return values.map((value) => {

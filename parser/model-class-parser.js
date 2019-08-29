@@ -2,7 +2,7 @@ const PropertyDefinition = require("./definitions/property-definition");
 
 module.exports = class ModelClassParser {
     parse(languageDefinition, classDefinition) {
-        let modelClassString = ''; //languageDefinition.importDeclarations(imports);
+        let modelClassString = `${languageDefinition.importDeclarations(classDefinition.dependencies)}\n\n`;
 
         let classBody = '';
 

@@ -35,11 +35,15 @@ class LanguageParser {
         const tableSchemaParser = new DatabaseTableSchemaClassParser();
         const sqliteLanguageDefinition = new SqliteLanguageDefinition();
         const classes = classDefinitions.map((classDefinition) => {
-            return {
-                models: modelParser.parse(languageDefinition, classDefinition), 
-                tableClasses: tableSchemaParser.parse(languageDefinition, sqliteLanguageDefinition, classDefinition)
+            const clasz = {
+                models: modelParser.parse(languageDefinition, classDefinition),
             };
+            if (classDefinition.needsTable) {
+                clasz.tableClasses = tableSchemaParser.parse(languageDefinition, sqliteLanguageDefinition, classDefinition);
+            }
+            return clasz;
         });
+        return classes;
     }
 
     transformDefitionsInClassDefinition(languageDefinition, definitions) {
@@ -49,9 +53,9 @@ class LanguageParser {
             
             const dependencies = [];
 
-            const enums = [];
+            let needsTable = false;
 
-            properties.filter((property) => {
+            const enums = properties.filter((property) => {
                 if (property.type.indexOf(languageDefinition.arrayKeyword) > -1) {
                     const indexOfSubtype = property.type.indexOf('<') + 1;
                     const subtype = property.type.substr(indexOfSubtype, property.type.length - 1 - indexOfSubtype);
@@ -63,13 +67,15 @@ class LanguageParser {
                         dependencies.push(property.type);
                     }
                 }
+                if (!needsTable && property.name === 'id') {
+                    needsTable = true;
+                }
                 return property.enumDefinition != null;
             }).map((property) => {
-                enums.push(property.enumDefinition);
+               return property.enumDefinition;
             });
 
-
-            return new ClassDefinition(className, properties, enums, dependencies);
+            return new ClassDefinition(className, properties, enums, dependencies, needsTable);
         });
     }
 

@@ -4,6 +4,8 @@ const StringUtils = require('../string-utils');
 
 const PropertyDefinition = require('./definitions/property-definition');
 
+const STRING_TO_ARRAY_SEPARATOR = ';';
+
 module.exports = class DatabaseTableSchemaClassParser {
     constructor() {
         this.classSufix = 'TableSchema';
@@ -15,7 +17,7 @@ module.exports = class DatabaseTableSchemaClassParser {
         const tableClassName = `${classDefinition.name}${this.classSufix}`;
 
         const nativeFields = classDefinition.properties.filter((value) => {
-            return languageDefinition.nativeTypes.indexOf(value.type) > -1 && value.type.indexOf(languageDefinition.arrayKeyword) < 0;
+            return value.type.indexOf(languageDefinition.mapKeyword) < 0;
         });
         
         let tableNameString = `\t${languageDefinition.fieldDeclaration(languageDefinition.publicKeyword, 'TABLE_NAME',  languageDefinition.stringKeyword,
@@ -45,21 +47,20 @@ module.exports = class DatabaseTableSchemaClassParser {
         }).join('\n');
     }
 
-    getDatabaseType(languageDefinition, databaseLanguageDefinition, fieldType) {
-        if (fieldType === languageDefinition.stringKeyword) {
+    getDatabaseType(languageDefinition, databaseLanguageDefinition, property) {
+        if (property.enumDefinition) {
             return databaseLanguageDefinition.stringKeyword;
         }
-        if (fieldType === languageDefinition.numberKeyword) {
+        if (property.type === languageDefinition.stringKeyword) {
+            return databaseLanguageDefinition.stringKeyword;
+        }
+        if (property.type === languageDefinition.numberKeyword) {
             return databaseLanguageDefinition.numberKeyword;
         }
-        if (fieldType === languageDefinition.intKeyword || fieldType === languageDefinition.booleanKeyword) {
+        if (property.type === languageDefinition.intKeyword || property.type === languageDefinition.booleanKeyword) {
             return databaseLanguageDefinition.integerKeyword;
         }
-        if (fieldType === languageDefinition.arrayKeyword) {
-            return null;
-        } else {
-            return databaseLanguageDefinition.integerKeyword;
-        }
+        return null;
     }
 
     getDatabaseFieldProperties(databaseLanguageDefinition, field) {
@@ -79,7 +80,7 @@ module.exports = class DatabaseTableSchemaClassParser {
 
     createCreateTableMethod(languageDefinition, databaseLanguageDefinition, nativeFields) {
         const fields = nativeFields.map((value) => {
-            const type = this.getDatabaseType(languageDefinition, databaseLanguageDefinition, value.type);
+            const type = this.getDatabaseType(languageDefinition, databaseLanguageDefinition, value);
             const properties = this.getDatabaseFieldProperties(databaseLanguageDefinition, value);
 
             let field = `\t\t\t\t${languageDefinition.stringReplacement} ${type}`;
@@ -111,7 +112,12 @@ module.exports = class DatabaseTableSchemaClassParser {
         const varName = classDefinition.name.substr(0, 1).toLowerCase() + classDefinition.name.substr(1);
 
         const parameters = nativeFields.map((property) => {
-            switch(property.type) {
+            let type = property.type;
+            if (property.enumDefinition) {
+                type = languageDefinition.stringKeyword;
+            }
+
+            switch(type) {
                 case languageDefinition.numberKeyword:
                     return `\n\t\t\t${languageDefinition.methodCall('cursor', 'getDouble', [`${languageDefinition.thisKeyword}.${property.field}`])}`;
                 case languageDefinition.stringKeyword:
@@ -119,11 +125,25 @@ module.exports = class DatabaseTableSchemaClassParser {
                 case languageDefinition.intKeyword:
                 case languageDefinition.booleanKeyword:
                     return `\n\t\t\t${languageDefinition.methodCall('cursor', 'getInt',  [`${languageDefinition.thisKeyword}.${property.field}`])}`;
+                case languageDefinition.mapKeyword:
+                    return null;
                 default:
-                    const getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.ID_FIELD`]);
-                    return `\n\t\t\t${languageDefinition.methodCall(
-                        languageDefinition.constructObject(`${property.type}${this.classSufix}`), 
-                        `selectBy${classDefinition.name}Id`, [getId])}`;
+                    let indexOfSubtype = property.type.indexOf('<') + 1;
+                    if (indexOfSubtype > 0 && property.type.indexOf('>') > -1) {
+                        type = property.type.substr(indexOfSubtype, property.type.length - indexOfSubtype - 1);
+                    }
+
+                    if (type === languageDefinition.stringKeyword) {
+                        return `\n\t\t\t${languageDefinition.methodCall(
+                            languageDefinition.methodCall('cursor', 'getString', [`${languageDefinition.thisKeyword}.${property.field}`]), 
+                            'split', [STRING_TO_ARRAY_SEPARATOR]
+                            )}`;
+                    } else {
+                        const getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.ID_FIELD`]);
+                        return `\n\t\t\t${languageDefinition.methodCall(
+                            languageDefinition.constructObject(`${type}${this.classSufix}`), 
+                            `selectBy${classDefinition.name}Id`, [getId])}`;
+                    }
             }
         });
 

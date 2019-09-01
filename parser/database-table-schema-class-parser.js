@@ -163,13 +163,49 @@ module.exports = class DatabaseTableSchemaClassParser {
     createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, classDefinition, properties) {
         const interrogations = [];
         const stringReplacements = [];
-        
-        const onlyNativeTypes = [];
-        const nonNativeTypes = [];
 
-        const fields = [`\n\t\t\t${languageDefinition.thisKeyword}.TABLE_NAME`];
         const objectName = this.classNameToVar(classDefinition);
 
+        const { onlyNativeTypes, nonNativeTypes } = this.getFieldsSeparatedByNative(languageDefinition, properties)
+
+        onlyNativeTypes.map(() => {
+            interrogations.push('?');
+            stringReplacements.push(`\`${languageDefinition.stringReplacement}\``);
+        });
+
+        const insertString = `${languageDefinition.stringDeclaration(
+            `${databaseLanguageDefinition.insertOrUpdateKeyword} \`${languageDefinition.stringReplacement}\` (${stringReplacements.join(', ')}) ${databaseLanguageDefinition.valuesKeyword} (${interrogations.join(', ')})`)}`;
+        const statement = `${languageDefinition.methodCall(insertString, 'format', this.getFields(languageDefinition, onlyNativeTypes, objectName))}`;
+        
+        let methodString = `\t\t${languageDefinition.returnDeclaration(languageDefinition.methodCall('db', 'execSQL', [statement]))}`;
+        if (nonNativeTypes.length > 0) {
+            methodString = this.getInsertMethodForNonNativeTypes(languageDefinition, nonNativeTypes, objectName, methodString, statement);
+        }
+
+        return `\t${languageDefinition.methodDeclaration('insertOrUpdate', 
+            [new PropertyDefinition('db', 'SQLiteDatabase'), new PropertyDefinition(`${objectName}`, `${classDefinition.name}`)],
+            languageDefinition.intKeyword, methodString)}`;
+    }
+
+    getInsertMethodForNonNativeTypes(languageDefinition, nonNativeTypes, objectName, methodString, statement) {
+        const methods = nonNativeTypes.map((property) => {
+            let methodName = 'insertOrUpdate';
+            if (property.type.indexOf(languageDefinition.arrayKeyword) > -1) {
+                methodName = 'batchInsertOrUpdate';
+            }
+            return `\t\t${languageDefinition.methodCall(languageDefinition.constructObject(`${property.subtype}${this.classSufix}`), methodName, ['db', `${objectName}.${property.name}`])};`;
+        }).join('\n');
+        methodString = `\t\t${languageDefinition.variableDeclaration('val', languageDefinition.intKeyword, 'result', languageDefinition.methodCall('db', 'execSQL', [statement]))}
+
+${methods}
+
+\t\t${languageDefinition.returnDeclaration('result')}`;
+        return methodString;
+    }
+
+    getFieldsSeparatedByNative(languageDefinition, properties) {
+        const onlyNativeTypes = [];
+        const nonNativeTypes = [];
         properties.forEach((property) => {
             if (languageDefinition.nativeTypes.indexOf(property.type) > -1 || 
                     (property.type.indexOf(languageDefinition.arrayKeyword) > -1 && property.subtype === languageDefinition.stringKeyword) ||
@@ -179,51 +215,23 @@ module.exports = class DatabaseTableSchemaClassParser {
                 nonNativeTypes.push(property);
             }
         });
+        return { onlyNativeTypes, nonNativeTypes };
+    }
 
-        fields.push(onlyNativeTypes.map((property) => {
-            interrogations.push('?');
-            stringReplacements.push(`\`${languageDefinition.stringReplacement}\``);
+    getFields(languageDefinition, properties, objectName) {
+        const fields = [`\n\t\t\t${languageDefinition.thisKeyword}.TABLE_NAME`];
+        fields.push(properties.map((property) => {
             return `\n\t\t\t${languageDefinition.thisKeyword}.${property.field}`;
         }));
         
-        fields.push(onlyNativeTypes.map((property) => {
+        fields.push(properties.map((property) => {
             if (property.subtype === languageDefinition.stringKeyword) {
                 return `\n\t\t\t${languageDefinition.methodCall(`${objectName}.${property.name}`, 'join', 
                     [languageDefinition.stringDeclaration(STRING_TO_ARRAY_SEPARATOR)])}`;
             }
             return `\n\t\t\t${objectName}.${property.name}`;
         }));
-
-        const insertString = `${languageDefinition.stringDeclaration(
-            `${databaseLanguageDefinition.insertOrUpdateKeyword} \`${languageDefinition.stringReplacement}\` (${stringReplacements.join(', ')}) ${databaseLanguageDefinition.valuesKeyword} (${interrogations.join(', ')})`)}`;
-        const statement = `${languageDefinition.methodCall(insertString, 'format', fields)}`;
-        
-        let methodString = `\t\t${languageDefinition.returnDeclaration(languageDefinition.methodCall('db', 'execSQL', [statement]))}`;
-        if (nonNativeTypes.length > 0) {
-            const methods = nonNativeTypes.map((property) => {
-                let methodName = 'insertOrUpdate';
-                if (property.type.indexOf(languageDefinition.arrayKeyword) > -1) {
-                    methodName = 'batchInsertOrUpdate';
-                }
-                return `\t\t${languageDefinition.methodCall(
-                    languageDefinition.constructObject(`${property.subtype}${this.classSufix}`), 
-                    methodName, ['db', `${objectName}.${property.name}`])};`;
-            }).join('\n');
-
-            methodString = `\t\t${languageDefinition.variableDeclaration(
-                'val', languageDefinition.intKeyword, 'result', languageDefinition.methodCall('db', 'execSQL', [statement]))}
-
-${methods}
-
-\t\t${languageDefinition.returnDeclaration('result')}`;
-        }
-
-        return `\t${languageDefinition.methodDeclaration('insertOrUpdate', 
-            [
-                new PropertyDefinition('db', 'SQLiteDatabase'), 
-                new PropertyDefinition(`${objectName}`, `${classDefinition.name}`)
-            ],
-            languageDefinition.intKeyword, methodString)}`;
+        return fields;
     }
 
     createBatchInsertOrUpdateMethod(languageDefinition, classDefinition) {

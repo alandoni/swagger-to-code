@@ -39,7 +39,12 @@ ${body}
 \t}`;
     }
 
-    printParametersNamesWithTypes(parameters, declareKeyword) {
+    printParametersNamesWithTypes(parameters, declareKeyword, shouldBreakLine = false) {
+        let separator = ', ';
+        if (shouldBreakLine) {
+            separator = ',\n\t\t';
+        }
+
         if (!parameters || parameters.length == 0) {
             return '';
         }
@@ -49,7 +54,7 @@ ${body}
                 declareString = `${declareKeyword} `;
             }
             return `${declareString}${parameter.name} : ${parameter.type}`;
-        }).join(',\n\t\t');
+        }).join(separator);
     }
 
     printValues(values) {
@@ -95,7 +100,11 @@ ${body}
     }
 
     constructorProperties(properties) {
-        return `(${this.printParametersNamesWithTypes(properties, 'val')})`;
+        let shouldBreakLine = true;
+        if (properties.length < 2) {
+            shouldBreakLine = false;
+        }
+        return `(${this.printParametersNamesWithTypes(properties, 'val', shouldBreakLine)})`;
     }
 
     constructorDeclaration(className, parameters, returnType, body, isDataClass) {
@@ -114,6 +123,12 @@ ${body}
 
     ifStatement(condition, body) {
         return `if (${condition}) {
+    ${body}
+\t\t}`;
+    }
+
+    lambdaMethod(caller, method, varName, body) {
+        return `${caller}.${method} { (${varName}) ->
     ${body}
 \t\t}`;
     }

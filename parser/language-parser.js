@@ -83,6 +83,12 @@ class LanguageParser {
         return Object.entries(properties).map((property) => {
             let [propertyName, propertyType] = this.getProperty(languageDefinition, property);
 
+            const indexOfSubtype = propertyType.indexOf('<') + 1;
+            let subtype = null;
+            if (indexOfSubtype > -1) {
+                subtype = propertyType.substr(indexOfSubtype, propertyType.length - 1 - indexOfSubtype);
+            }
+
             let enumDefinition = null;
             if (property[1].enum) {
                 const enumName = propertyName.substr(0, 1).toUpperCase() + propertyName.substr(1);
@@ -95,7 +101,7 @@ class LanguageParser {
                 required = true;
             }
 
-            return new PropertyDefinition(propertyName, propertyType, enumDefinition, required);
+            return new PropertyDefinition(propertyName, propertyType, enumDefinition, required, subtype);
         });
     }
 

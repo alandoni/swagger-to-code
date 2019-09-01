@@ -15,6 +15,10 @@ module.exports = class SqliteLanguageDefinition {
     return 'UPDATE';
   }
 
+  get insertOrUpdateKeyword() {
+    return 'INSERT OR UPDATE INTO';
+  }
+
   get deleteKeyword() {
     return `DELETE ${this.fromKeyword}`;
   }

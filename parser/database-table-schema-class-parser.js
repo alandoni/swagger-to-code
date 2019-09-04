@@ -28,6 +28,7 @@ module.exports = class DatabaseTableSchemaClassParser {
             this.createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields),
             this.createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields),
             this.createBatchInsertOrUpdateMethod(languageDefinition, classDefinition),
+            this.createDeleteMethod(languageDefinition, databaseLanguageDefinition),
         ].join('\n\n');
 
         const body = `${tableNameString}\n${fieldsString}\n\n${methods}`;
@@ -246,5 +247,22 @@ ${methods}
                 new PropertyDefinition(`${objectName}s`, `${languageDefinition.arrayKeyword}<${classDefinition.name}>`)
             ],
             `${languageDefinition.arrayKeyword}<${languageDefinition.intKeyword}>`, methodString)}`;
+    }
+
+    createDeleteMethod(languageDefinition, databaseLanguageDefinition) {
+        const sql = languageDefinition.stringDeclaration(
+            `${databaseLanguageDefinition.deleteKeyword} ${languageDefinition.stringReplacement} ${databaseLanguageDefinition.whereKeyword} ${languageDefinition.stringReplacement} = ${databaseLanguageDefinition.parameterKeyword}`
+        );
+
+        const formatMethodCall = languageDefinition.methodCall(sql, 'format', 
+            [`${languageDefinition.thisKeyword}.TABLE_NAME`, `${languageDefinition.thisKeyword}.ID_FIELD`]);
+
+        const dbExecCall = languageDefinition.methodCall('db', 'execSQL', [formatMethodCall, 'id']);
+        const returnCall = `\t\t${languageDefinition.returnDeclaration(dbExecCall)}`;
+        return `\t${languageDefinition.methodDeclaration('deleteById', 
+        [
+            new PropertyDefinition('db', 'SQLiteDatabase'), 
+            new PropertyDefinition('id', languageDefinition.intKeyword)
+        ], languageDefinition.intKeyword, returnCall)}`;
     }
 }

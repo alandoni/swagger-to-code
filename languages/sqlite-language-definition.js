@@ -28,15 +28,27 @@ module.exports = class SqliteLanguageDefinition {
   }
 
   get fromKeyword() {
-    return 'FROM'
+    return 'FROM';
   }
 
   get setKeyword() {
-    return 'SET'
+    return 'SET';
   }
 
   get valuesKeyword() {
-    return 'VALUES'
+    return 'VALUES';
+  }
+
+  get whereKeyword() {
+    return 'WHERE';
+  }
+
+  get orderByKeyword() {
+    return 'ORDER BY';
+  }
+
+  get betweenKeyword() {
+    return 'BETWEEN';
   }
 
   get integerKeyword() {
@@ -60,7 +72,7 @@ module.exports = class SqliteLanguageDefinition {
   }
 
   get primaryKeyKeyword() {
-    return 'PRIMARY KEY'
+    return 'PRIMARY KEY';
   }
 
   get parameterKeyword() {

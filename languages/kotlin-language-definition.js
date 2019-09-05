@@ -127,6 +127,12 @@ ${body}
 \t\t}`;
     }
 
+    whileStatement(condition, body) {
+        return `while (${condition}) {
+    ${body}
+\t\t}`;
+    }
+
     lambdaMethod(caller, method, varName, body) {
         return `${caller}.${method} { (${varName}) ->
     ${body}
@@ -149,6 +155,16 @@ ${body}
 
     stringDeclaration(content) {
         return `"${content}"`;
+    }
+
+    tryCatchStatement(tryBody, catchBody, finallyBody) {
+        return `\t\ttry {
+    ${tryBody}
+\t\t} catch (e: Exception) {
+    ${catchBody}
+\t\t} finally {
+    ${finallyBody}
+\t\t}`
     }
 
     get useDataclassForModels() {
@@ -192,6 +208,9 @@ ${body}
     }
     get arrayKeyword() {
         return "Array";
+    }
+    get arrayListKeyword() {
+        return "ArrayList";
     }
     get mapKeyword() {
         return "Map";

@@ -27,6 +27,10 @@ module.exports = class SqliteLanguageDefinition {
     return 'SELECT';
   }
 
+  get selectAllFieldsKeyword() {
+    return 'SELECT *';
+  }
+
   get fromKeyword() {
     return 'FROM';
   }

@@ -29,6 +29,9 @@ module.exports = class DatabaseTableSchemaClassParser {
             this.createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields),
             this.createBatchInsertOrUpdateMethod(languageDefinition, classDefinition),
             this.createDeleteMethod(languageDefinition, databaseLanguageDefinition),
+            this.createReadListFromDbMethod(languageDefinition, classDefinition),
+            this.createSelectAllMethod(languageDefinition, databaseLanguageDefinition, classDefinition),
+            this.createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, classDefinition),
         ].join('\n\n');
 
         const body = `${tableNameString}\n${fieldsString}\n\n${methods}`;
@@ -107,7 +110,10 @@ module.exports = class DatabaseTableSchemaClassParser {
         const methodCall = `${languageDefinition.methodCall(tableString, 'format', tablePlusParameters)}`;
         
         let methodString = `\t\t${languageDefinition.methodCall('db', 'execSQL', [methodCall])};`;
-        return `\t${languageDefinition.methodDeclaration('createTable', [new PropertyDefinition('db', 'SQLiteDatabase')],
+        return `\t${languageDefinition.methodDeclaration('createTable', 
+            [
+                new PropertyDefinition('db', 'SQLiteDatabase')
+            ],
             languageDefinition.voidReturnKeyword, methodString)}`;
     }
 
@@ -140,14 +146,16 @@ module.exports = class DatabaseTableSchemaClassParser {
                     }
 
                     if (type === languageDefinition.stringKeyword) {
+                        const callCursorGetStringMethod = languageDefinition.methodCall('cursor', 'getString', [`${languageDefinition.thisKeyword}.${property.field}`]);
                         return `\n\t\t\t${languageDefinition.methodCall(
-                            languageDefinition.methodCall('cursor', 'getString', [`${languageDefinition.thisKeyword}.${property.field}`]), 
+                            callCursorGetStringMethod, 
                             'split', [STRING_TO_ARRAY_SEPARATOR]
                             )}`;
                     } else {
                         const getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.ID_FIELD`]);
+                        const constructObject = languageDefinition.constructObject(`${type}${this.classSufix}`);
                         return `\n\t\t\t${languageDefinition.methodCall(
-                            languageDefinition.constructObject(`${type}${this.classSufix}`), 
+                            constructObject, 
                             `selectBy${classDefinition.name}Id`, [getId])}`;
                     }
             }
@@ -174,17 +182,21 @@ module.exports = class DatabaseTableSchemaClassParser {
             stringReplacements.push(`\`${languageDefinition.stringReplacement}\``);
         });
 
-        const insertString = `${languageDefinition.stringDeclaration(
+        const sql = `${languageDefinition.stringDeclaration(
             `${databaseLanguageDefinition.insertOrUpdateKeyword} \`${languageDefinition.stringReplacement}\` (${stringReplacements.join(', ')}) ${databaseLanguageDefinition.valuesKeyword} (${interrogations.join(', ')})`)}`;
-        const statement = `${languageDefinition.methodCall(insertString, 'format', this.getFields(languageDefinition, onlyNativeTypes, objectName))}`;
+        const statement = `${languageDefinition.methodCall(sql, 'format', this.getFields(languageDefinition, onlyNativeTypes, objectName))}`;
         
-        let methodString = `\t\t${languageDefinition.returnDeclaration(languageDefinition.methodCall('db', 'execSQL', [statement]))}`;
+        const callExecSqlMethod = languageDefinition.methodCall('db', 'execSQL', [statement]);
+        let methodString = `\t\t${languageDefinition.returnDeclaration(callExecSqlMethod)}`;
         if (nonNativeTypes.length > 0) {
             methodString = this.getInsertMethodForNonNativeTypes(languageDefinition, nonNativeTypes, objectName, methodString, statement);
         }
 
         return `\t${languageDefinition.methodDeclaration('insertOrUpdate', 
-            [new PropertyDefinition('db', 'SQLiteDatabase'), new PropertyDefinition(`${objectName}`, `${classDefinition.name}`)],
+            [
+                new PropertyDefinition('db', 'SQLiteDatabase'), 
+                new PropertyDefinition(`${objectName}`, `${classDefinition.name}`)
+            ],
             languageDefinition.intKeyword, methodString)}`;
     }
 
@@ -194,9 +206,12 @@ module.exports = class DatabaseTableSchemaClassParser {
             if (property.type.indexOf(languageDefinition.arrayKeyword) > -1) {
                 methodName = 'batchInsertOrUpdate';
             }
-            return `\t\t${languageDefinition.methodCall(languageDefinition.constructObject(`${property.subtype}${this.classSufix}`), methodName, ['db', `${objectName}.${property.name}`])};`;
+            const constructObject = languageDefinition.constructObject(`${property.subtype}${this.classSufix}`);
+            return `\t\t${languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.name}`])};`;
         }).join('\n');
-        methodString = `\t\t${languageDefinition.variableDeclaration('val', languageDefinition.intKeyword, 'result', languageDefinition.methodCall('db', 'execSQL', [statement]))}
+
+        const callExecSqlMethod = languageDefinition.methodCall('db', 'execSQL', [statement]);
+        methodString = `\t\t${languageDefinition.variableDeclaration('val', languageDefinition.intKeyword, 'result', callExecSqlMethod)}
 
 ${methods}
 
@@ -238,8 +253,10 @@ ${methods}
     createBatchInsertOrUpdateMethod(languageDefinition, classDefinition) {
         const objectName = this.classNameToVar(classDefinition);
 
-        let mapBodyString = `\t\t\t${languageDefinition.returnDeclaration(languageDefinition.methodCall(languageDefinition.thisKeyword, 'insertOrUpdate', ['db', objectName]))}`;
-        let methodString = `\t\t${languageDefinition.returnDeclaration(languageDefinition.lambdaMethod(`${objectName}s`, 'map', objectName, mapBodyString))}`;
+        const callInsertOrUpdateMethod = languageDefinition.methodCall(languageDefinition.thisKeyword, 'insertOrUpdate', ['db', objectName]);
+        let mapBodyString = `\t\t\t${languageDefinition.returnDeclaration(callInsertOrUpdateMethod)}`;
+        const callMapMethod = languageDefinition.lambdaMethod(`${objectName}s`, 'map', objectName, mapBodyString);
+        let methodString = `\t\t${languageDefinition.returnDeclaration(callMapMethod)}`;
 
         return `\t${languageDefinition.methodDeclaration('batchInsertOrUpdate', 
             [
@@ -264,5 +281,84 @@ ${methods}
             new PropertyDefinition('db', 'SQLiteDatabase'), 
             new PropertyDefinition('id', languageDefinition.intKeyword)
         ], languageDefinition.intKeyword, returnCall)}`;
+    }
+
+    createReadListFromDbMethod(languageDefinition, classDefinition) {
+        const listDeclaration = languageDefinition.variableDeclaration('val',
+        `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', 
+        `${languageDefinition.constructObject(languageDefinition.arrayListKeyword)}`);
+
+        const cursorMoveToNext = languageDefinition.methodCall('cursor', 'moveToNext');
+        const readFromDbMethodCall = languageDefinition.methodCall('readFromDb', ['cursor']);
+        const whileBody = `\t\t\t${languageDefinition.methodCall('list', 'add', [readFromDbMethodCall])}`;
+        const whileStatement = languageDefinition.whileStatement(cursorMoveToNext, whileBody);
+        const returnCall = `${languageDefinition.returnDeclaration('list')}`;
+
+        const methodBody = `\t\t${listDeclaration}
+\t\t${whileStatement}
+\t\t${returnCall}`
+        return `\t${languageDefinition.methodDeclaration('readListFromDb', 
+        [
+            new PropertyDefinition('cursor', 'Cursor'),
+        ], languageDefinition.intKeyword, methodBody)}`;
+    }
+
+    createSelectAllMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
+        const sql = languageDefinition.stringDeclaration(
+            `${databaseLanguageDefinition.selectAllFieldsKeyword} ${databaseLanguageDefinition.fromKeyword} ${languageDefinition.stringReplacement}`
+        );
+
+        const formatMethodCall = languageDefinition.methodCall(sql, 'format', 
+            [`${languageDefinition.thisKeyword}.TABLE_NAME`]);
+
+        const dbExecCall = languageDefinition.methodCall('db', 'rawQuery', [formatMethodCall]);
+        
+        const methodBody = this.selectMethodBody(languageDefinition, classDefinition, dbExecCall);
+
+        return `\t${languageDefinition.methodDeclaration('selectAll', 
+        [
+            new PropertyDefinition('db', 'SQLiteDatabase')
+        ], `${languageDefinition.arrayKeyword}<${classDefinition.name}>`, methodBody)}`;
+    }
+
+    selectMethodBody(languageDefinition, classDefinition, dbExecCall) {
+        const cursorDeclaration = languageDefinition.variableDeclaration('var', 'Cursor', 'cursor');
+        const listDeclaration = languageDefinition.variableDeclaration('val', `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', `${languageDefinition.constructObject(languageDefinition.arrayListKeyword)}`);
+        const assignRawQueryToCursor = languageDefinition.assignment('cursor', dbExecCall);
+        const callReadListFromDbMethod = languageDefinition.methodCall(languageDefinition.thisKeyword, 'readListFromDb', ['cursor']);
+        const assignList = languageDefinition.assignment('list', callReadListFromDbMethod);
+        const tryBody = `\t\t\t${assignRawQueryToCursor}
+\t\t\t${assignList}`;
+        const catchBody = `\t\t\t${languageDefinition.methodCall(languageDefinition.thisKeyword, 'onError')}`;
+        const finallyBody = `\t\t\t${languageDefinition.methodCall('cursor', 'close')}
+\t\t\t${languageDefinition.methodCall('db', 'close')}`;
+        const tryCatch = languageDefinition.tryCatchStatement(tryBody, catchBody, finallyBody);
+        const returnCall = `\t\t${languageDefinition.returnDeclaration('list')}`;
+        const methodBody = `\t\t${listDeclaration}
+\t\t${cursorDeclaration}
+
+${tryCatch}
+
+${returnCall}`;
+        return methodBody;
+    }
+
+    createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
+        const sql = languageDefinition.stringDeclaration(
+            `${databaseLanguageDefinition.selectAllFieldsKeyword} ${databaseLanguageDefinition.fromKeyword} ${languageDefinition.stringReplacement} ${databaseLanguageDefinition.whereKeyword} ${languageDefinition.stringReplacement} = ${databaseLanguageDefinition.parameterKeyword}`
+        );
+
+        const formatMethodCall = languageDefinition.methodCall(sql, 'format', 
+                [`${languageDefinition.thisKeyword}.TABLE_NAME`, `${languageDefinition.thisKeyword}.ID_FIELD`]);
+
+        const dbExecCall = languageDefinition.methodCall('db', 'rawQuery', [formatMethodCall, 'id']);
+
+        const methodBody = this.selectMethodBody(languageDefinition, classDefinition, dbExecCall);
+
+        return `\t${languageDefinition.methodDeclaration('selectById', 
+        [
+            new PropertyDefinition('db', 'SQLiteDatabase'), 
+            new PropertyDefinition('id', languageDefinition.intKeyword)
+        ], languageDefinition.intKeyword, methodBody)}`;
     }
 }

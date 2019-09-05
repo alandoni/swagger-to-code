@@ -211,7 +211,7 @@ module.exports = class DatabaseTableSchemaClassParser {
         }).join('\n');
 
         const callExecSqlMethod = languageDefinition.methodCall('db', 'execSQL', [statement]);
-        methodString = `\t\t${languageDefinition.variableDeclaration('val', languageDefinition.intKeyword, 'result', callExecSqlMethod)}
+        methodString = `\t\t${languageDefinition.variableDeclaration(languageDefinition.constKeyword, languageDefinition.intKeyword, 'result', callExecSqlMethod)}
 
 ${methods}
 
@@ -306,7 +306,7 @@ ${methods}
         if (languageDefinition.shouldConstructList) {
             listConstruct = languageDefinition.constructObject(languageDefinition.arrayListKeyword);
         }
-        const listDeclaration = languageDefinition.variableDeclaration('val', `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', listConstruct);
+        const listDeclaration = languageDefinition.variableDeclaration(languageDefinition.constKeyword, `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', listConstruct);
         return listDeclaration;
     }
 
@@ -329,7 +329,7 @@ ${methods}
     }
 
     selectMethodBody(languageDefinition, classDefinition, dbExecCall) {
-        const cursorDeclaration = languageDefinition.variableDeclaration('var', 'Cursor', 'cursor');
+        const cursorDeclaration = languageDefinition.variableDeclaration(languageDefinition.variableKeyword, 'Cursor', 'cursor');
         const listDeclaration = this.createListObject(languageDefinition, classDefinition);
         const assignRawQueryToCursor = languageDefinition.assignment('cursor', dbExecCall);
         const callReadListFromDbMethod = languageDefinition.methodCall(languageDefinition.thisKeyword, 'readListFromDb', ['cursor']);

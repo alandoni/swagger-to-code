@@ -20,12 +20,12 @@ class LanguageDefinition {
     }
 
     methodDeclaration(methodName, parameters, returnType, body) {
-        return `${methodName}(${this.printParametersNames(parameters)}) {
+        return `${methodName}(${this.printParametersNamesWithTypes(parameters)}) {
 ${body}
 \t}`;
     }
 
-    printParametersNames(parameters) {
+    printParametersNamesWithTypes(parameters, declareKeyword, shouldBreakLine = false) {
         if (!parameters || parameters.length == 0) {
             return '';
         }
@@ -73,7 +73,7 @@ ${body}
     }
 
     constructorDeclaration(className, parameters, returnType, body, isDataClass) {
-        return `contructor(${this.printParametersNames(parameters)}) {
+        return `contructor(${this.printParametersNamesWithTypes(parameters)}) {
 ${parameters.map((value) => {
         return `\t\tthis.${value.name} = ${value.name};`;
     }).join('\n')}
@@ -150,76 +150,76 @@ ${parameters.map((value) => {
         return false;
     }
     get thisKeyword() {
-        return "this";
+        return 'this';
     }
     get constKeyword() {
-        return "val";
+        return 'const';
     }
     get variableKeyword() {
-        return "var";
+        return 'let';
     }
     get nullKeyword() {
-        return "null";
+        return 'null';
     }
     get anyTypeKeyword() {
-        return "";
+        return '';
     }
     get intKeyword() {
-        return "int";
+        return 'int';
     }
     get numberKeyword() {
-        return "float";
+        return 'float';
     }
     get stringKeyword() {
-        return "string";
+        return 'string';
     }
     get booleanKeyword() {
-        return "bool";
+        return 'bool';
     }
     get falseKeyword() {
-        return "false";
+        return 'false';
     }
     get trueKeyword() {
-        return "true";
+        return 'true';
     }
     get arrayKeyword() {
-        return "array";
+        return 'array';
     }
     get arrayListKeyword() {
-        return "[]";
+        return '[]';
     }
     get shouldConstructList() {
         return false;
     }
     get mapKeyword() {
-        return "map";
+        return 'map';
     }
     get publicKeyword() {
-        return "";
+        return '';
     }
     get privateKeyword() {
-        return "";
+        return '';
     }
     get stringReplacement() {
-        return "%s";
+        return '%s';
     }
 
     compareTypeOfObjectsMethod(var1, var2) {
-        return "";
+        return '';
     }
 
     equalMethod(var1, var2, negative) {
-        let equal = "===";
+        let equal = '===';
         if (negative) {
-            equal = "!==";
+            equal = '!==';
         }
         return `${var1} ${equal} ${var2}`;
     }
 
     simpleComparison(var1, var2, negative) {
-        let equal = "==";
+        let equal = '==';
         if (negative) {
-            equal = "!=";
+            equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
     }

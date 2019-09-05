@@ -104,7 +104,7 @@ ${body}
         if (properties.length < 2) {
             shouldBreakLine = false;
         }
-        return `(${this.printParametersNamesWithTypes(properties, 'val', shouldBreakLine)})`;
+        return `(${this.printParametersNamesWithTypes(properties, LanguageDefinition.constKeyword, shouldBreakLine)})`;
     }
 
     constructorDeclaration(className, parameters, returnType, body, isDataClass) {
@@ -172,64 +172,64 @@ ${body}
         return true;
     }
     get thisKeyword() {
-        return "this";
+        return 'this';
     }
     get constKeyword() {
-        return "val";
+        return 'val';
     }
     get variableKeyword() {
-        return "var";
+        return 'var';
     }
     get nullKeyword() {
-        return "null";
+        return 'null';
     }
     get anyTypeKeyword() {
-        return "Any";
+        return 'Any';
     }
     get intKeyword() {
-        return "Int";
+        return 'Int';
     }
     get numberKeyword() {
-        return "Double";
+        return 'Double';
     }
     get stringKeyword() {
-        return "String";
+        return 'String';
     }
     get booleanKeyword() {
-        return "Boolean";
+        return 'Boolean';
     }
     get falseKeyword() {
-        return "false";
+        return 'false';
     }
     get trueKeyword() {
-        return "true";
+        return 'true';
     }
     get arrayKeyword() {
-        return "Array";
+        return 'Array';
     }
     get arrayListKeyword() {
-        return "ArrayList";
+        return 'ArrayList';
     }
     get shouldConstructList() {
         return true;
     }
     get mapKeyword() {
-        return "Map";
+        return 'Map';
     }
     get publicKeyword() {
-        return "public";
+        return 'public';
     }
     get privateKeyword() {
-        return "private";
+        return 'private';
     }
     get stringReplacement() {
-        return "%s";
+        return '%s';
     }
 
     compareTypeOfObjectsMethod(var1, var2, negative) {
-        let equal = "==";
+        let equal = '==';
         if (negative) {
-            equal = "!=";
+            equal = '!=';
         }
         return `${var1}::class ${equal} ${var2}::class`;
     }
@@ -244,9 +244,9 @@ ${body}
     }
 
     simpleComparison(var1, var2, negative) {
-        let equal = "==";
+        let equal = '==';
         if (negative) {
-            equal = "!=";
+            equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
     }

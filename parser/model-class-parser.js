@@ -17,8 +17,12 @@ module.exports = class ModelClassParser {
 
         let propertiesString = '';
         if (!languageDefinition.useDataclassForModels) {
-            propertiesString = this.parseProperties(languageDefinition, classDefinition.properties);
-            classBody += `${propertiesString}\n\n${methods.join('\n\n')}`;
+            if (languageDefinition.needDeclareFields) {
+                classBody += this.parseProperties(languageDefinition, classDefinition.properties);
+                classBody += '\n\n';
+            }
+            methods.splice(0, 0, constructor);
+            classBody += methods.join('\n\n');
         } else {
             classBody = `\n${methods.join('\n\n')}`;
         }
@@ -28,7 +32,6 @@ module.exports = class ModelClassParser {
         }
 
         if (!languageDefinition.useDataclassForModels) {
-            methods.splice(0, 0, constructor)
             modelClassString += languageDefinition.classDeclaration(classDefinition.name, null, classBody);
         } else {
             modelClassString += languageDefinition.classDeclaration(classDefinition.name, null, classBody, true, classDefinition.properties);

@@ -3,7 +3,7 @@ const StringUtils = require('../string-utils');
 class LanguageDefinition {
     importDeclarations(imports) {
         return imports.map((importFile) => {
-            return `const ${importFile.name} = require(${importFile.file});`;
+            return `const ${importFile} = require(${this.stringDeclaration(`./${importFile}`)});`;
         }).join('\n');
     }
 
@@ -21,8 +21,8 @@ class LanguageDefinition {
 
     methodDeclaration(methodName, parameters, returnType, body) {
         return `${methodName}(${this.printParametersNames(parameters)}) {
-    ${body}
-    }`;
+${body}
+\t}`;
     }
 
     printParametersNames(parameters) {
@@ -34,17 +34,30 @@ class LanguageDefinition {
         }).join(', ');
     }
 
+    printValues(values) {
+        if (!values || values.length === 0) {
+            return '';
+        }
+        return values.map((value) => {
+            return `${value}`;
+        }).join(', ');
+    }
+
     fieldDeclaration(visibility, name, type, defaultValue) {
         let field = `get ${name}() {\n`;
         if (defaultValue) {
-            field += `\treturn ${defaultValue};`;
+            field += `\t\t${this.returnDeclaration(defaultValue)}`;
         }
-        field += '\n}';
+        field += '\n\t}';
         return field;
     }
 
     methodCall(caller, methodName, parameterValues) {
-        return `${caller}.${methodName}(${this.printParametersNames(parameterValues)})`;
+        let callerString = '';
+        if (caller) {
+            callerString = `${caller}.`;
+        }
+        return `${callerString}${methodName}(${this.printValues(parameterValues)})`;
     }
 
     variableDeclaration(declareType, type, name, defaultValue) {
@@ -52,7 +65,7 @@ class LanguageDefinition {
         if (defaultValue) {
             variable += ` = ${defaultValue}`;
         }
-        return variable +=';';
+        return variable += ';';
     }
 
     returnDeclaration(value) {
@@ -61,31 +74,40 @@ class LanguageDefinition {
 
     constructorDeclaration(className, parameters, returnType, body, isDataClass) {
         return `contructor(${this.printParametersNames(parameters)}) {
-    ${this.parameters.map((value) => {
-        return `this.${value.name} = ${value.name};`;
+${parameters.map((value) => {
+        return `\t\tthis.${value.name} = ${value.name};`;
     }).join('\n')}
-    ${body}
-    }`;
+\t}`;
     }
 
     enumDeclaration(enumName, values) {
-        return `class ${enumName} {
+        return `\tclass ${enumName} {
     ${values.map((value, index) => {
-        return `${StringUtils.splitNameWithUnderlines(value).toUpperCase()} = ${index}`;
-    })}
-    }`;
+        return `\t\t${value} = ${index}`;
+    }).join(',\n')}
+\t}`;
     }
 
     ifStatement(condition, body) {
         return `if (${condition}) {
     ${body}
-    }`;
+\t\t}`;
+    }
+
+    whileStatement(condition, body) {
+        return `while (${condition}) {
+    ${body}
+\t\t}`;
+    }
+
+    lambdaMethod(caller, method, varName, body) {
+        return `${caller}.${method} { (${varName}) ->
+    ${body}
+\t\t}`;
     }
 
     ifNullStatement(object, body) {
-        return `if (${object}) {
-    ${body}
-}`;
+        return this.ifStatement(object, body);
     }
 
     assignment(name1, name2) {
@@ -93,11 +115,21 @@ class LanguageDefinition {
     }
 
     constructObject(type, parameters) {
-        return `new ${this.methodCall(type, parameters)})`;
+        return `new ${this.methodCall(null, type, parameters)}`;
     }
 
     stringDeclaration(content) {
         return `'${content}'`;
+    }
+
+    tryCatchStatement(tryBody, catchBody, finallyBody) {
+        return `\t\ttry {
+    ${tryBody}
+\t\t} catch (error) {
+    ${catchBody}
+\t\t} finally {
+    ${finallyBody}
+\t\t}`
     }
 
     get nativeTypes() {
@@ -109,6 +141,9 @@ class LanguageDefinition {
             this.mapKeyword];
     }
     get useDataclassForModels() {
+        return false;
+    }
+    get needDeclareFields() {
         return false;
     }
     get isTypesafeLanguage() {
@@ -130,16 +165,16 @@ class LanguageDefinition {
         return "";
     }
     get intKeyword() {
-        return "";
+        return "int";
     }
     get numberKeyword() {
-        return "";
+        return "float";
     }
     get stringKeyword() {
-        return "";
+        return "string";
     }
     get booleanKeyword() {
-        return "";
+        return "bool";
     }
     get falseKeyword() {
         return "false";
@@ -148,10 +183,16 @@ class LanguageDefinition {
         return "true";
     }
     get arrayKeyword() {
-        return "";
+        return "array";
+    }
+    get arrayListKeyword() {
+        return "[]";
+    }
+    get shouldConstructList() {
+        return false;
     }
     get mapKeyword() {
-        return "";
+        return "map";
     }
     get publicKeyword() {
         return "";

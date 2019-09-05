@@ -1,8 +1,9 @@
-const regex = new RegExp('(?=[A-Z])','g');
-
 module.exports = class StringUtils {
+  static get regex() {
+    return new RegExp('(?=[A-Z])','g');
+  }
   static splitNameWithUnderlines(name) {
-    const names = name.split(regex)
+    const names = name.split(this.regex);
     return names.join('_');
   }
 }

@@ -284,9 +284,7 @@ ${methods}
     }
 
     createReadListFromDbMethod(languageDefinition, classDefinition) {
-        const listDeclaration = languageDefinition.variableDeclaration('val',
-        `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', 
-        `${languageDefinition.constructObject(languageDefinition.arrayListKeyword)}`);
+        const listDeclaration = this.createListObject(languageDefinition, classDefinition);
 
         const cursorMoveToNext = languageDefinition.methodCall('cursor', 'moveToNext');
         const readFromDbMethodCall = languageDefinition.methodCall('readFromDb', ['cursor']);
@@ -301,6 +299,15 @@ ${methods}
         [
             new PropertyDefinition('cursor', 'Cursor'),
         ], languageDefinition.intKeyword, methodBody)}`;
+    }
+
+    createListObject(languageDefinition, classDefinition) {
+        let listConstruct = languageDefinition.arrayListKeyword;
+        if (languageDefinition.shouldConstructList) {
+            listConstruct = languageDefinition.constructObject(languageDefinition.arrayListKeyword);
+        }
+        const listDeclaration = languageDefinition.variableDeclaration('val', `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', listConstruct);
+        return listDeclaration;
     }
 
     createSelectAllMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
@@ -323,7 +330,7 @@ ${methods}
 
     selectMethodBody(languageDefinition, classDefinition, dbExecCall) {
         const cursorDeclaration = languageDefinition.variableDeclaration('var', 'Cursor', 'cursor');
-        const listDeclaration = languageDefinition.variableDeclaration('val', `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', `${languageDefinition.constructObject(languageDefinition.arrayListKeyword)}`);
+        const listDeclaration = this.createListObject(languageDefinition, classDefinition);
         const assignRawQueryToCursor = languageDefinition.assignment('cursor', dbExecCall);
         const callReadListFromDbMethod = languageDefinition.methodCall(languageDefinition.thisKeyword, 'readListFromDb', ['cursor']);
         const assignList = languageDefinition.assignment('list', callReadListFromDbMethod);

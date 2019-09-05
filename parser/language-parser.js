@@ -85,7 +85,7 @@ class LanguageParser {
 
             const indexOfSubtype = propertyType.indexOf('<') + 1;
             let subtype = null;
-            if (indexOfSubtype > -1) {
+            if (indexOfSubtype > 0) {
                 subtype = propertyType.substr(indexOfSubtype, propertyType.length - 1 - indexOfSubtype);
             }
 

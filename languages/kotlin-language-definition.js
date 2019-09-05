@@ -148,9 +148,7 @@ ${body}
     }
 
     ifNullStatement(object, body) {
-        return `if (${object} == ${this.nullKeyword}) {
-${body}
-\t\t}`;
+        return this.ifStatement(`${object} == ${this.nullKeyword}`, body);
     }
 
     stringDeclaration(content) {
@@ -211,6 +209,9 @@ ${body}
     }
     get arrayListKeyword() {
         return "ArrayList";
+    }
+    get shouldConstructList() {
+        return true;
     }
     get mapKeyword() {
         return "Map";

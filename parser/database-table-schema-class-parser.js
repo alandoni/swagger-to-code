@@ -15,7 +15,10 @@ module.exports = class DatabaseTableSchemaClassParser {
         const tableClassName = `${classDefinition.name}${this.classSufix}`;
 
         const nativeFields = classDefinition.properties.filter((value) => {
-            return value.type.indexOf(languageDefinition.mapKeyword) < 0;
+            return value.type.indexOf(languageDefinition.mapKeyword) < 0 || 
+                value.type.indexOf(languageDefinition.arrayKeyword) < 0 ||
+                value.type.indexOf(languageDefinition.arrayKeyword) >= 0 && 
+                value.subtype === languageDefinition.stringKeyword;
         });
         
         let tableNameString = `\t${languageDefinition.fieldDeclaration(languageDefinition.publicKeyword, 'TABLE_NAME',  languageDefinition.stringKeyword,
@@ -25,7 +28,7 @@ module.exports = class DatabaseTableSchemaClassParser {
 
         const methods = [
             this.createCreateTableMethod(languageDefinition, databaseLanguageDefinition, nativeFields),
-            this.createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields),
+            this.createReadFromDbMethod(languageDefinition, classDefinition, nativeFields),
             this.createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields),
             this.createBatchInsertOrUpdateMethod(languageDefinition, classDefinition),
             this.createDeleteMethod(languageDefinition, databaseLanguageDefinition),
@@ -121,7 +124,7 @@ module.exports = class DatabaseTableSchemaClassParser {
         return classDefinition.name.substr(0, 1).toLowerCase() + classDefinition.name.substr(1);
     }
 
-    createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, classDefinition, nativeFields) {
+    createReadFromDbMethod(languageDefinition, classDefinition, nativeFields) {
         const varName = this.classNameToVar(classDefinition);
 
         const parameters = nativeFields.map((property) => {
@@ -141,22 +144,24 @@ module.exports = class DatabaseTableSchemaClassParser {
                 case languageDefinition.mapKeyword:
                     return null;
                 default:
-                    if (property.subtype) {
-                        type = property.subtype;
-                    }
-
-                    if (type === languageDefinition.stringKeyword) {
+                    //Array of strings, separated by char
+                    if (languageDefinition.stringKeyword === property.subtype) {
                         const callCursorGetStringMethod = languageDefinition.methodCall('cursor', 'getString', [`${languageDefinition.thisKeyword}.${property.field}`]);
                         return `\n\t\t\t${languageDefinition.methodCall(
                             callCursorGetStringMethod, 
                             'split', [STRING_TO_ARRAY_SEPARATOR]
                             )}`;
                     } else {
-                        const getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.ID_FIELD`]);
+                        let type = property.type;
+                        let getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.${property.field}`]);
+                        if (type.indexOf(languageDefinition.arrayKeyword) >= 0 && type.subtype) {
+                            type = classDefinition.name;
+                            getId = languageDefinition.methodCall('cursor', 'getInt', [`${languageDefinition.thisKeyword}.ID_FIELD`]);
+                        }
                         const constructObject = languageDefinition.constructObject(`${type}${this.classSufix}`);
                         return `\n\t\t\t${languageDefinition.methodCall(
                             constructObject, 
-                            `selectBy${classDefinition.name}Id`, [getId])}`;
+                            `selectBy${type}Id`, [getId])}`;
                     }
             }
         });
@@ -201,7 +206,9 @@ module.exports = class DatabaseTableSchemaClassParser {
     }
 
     getInsertMethodForNonNativeTypes(languageDefinition, nonNativeTypes, objectName, methodString, statement) {
-        const methods = nonNativeTypes.map((property) => {
+        const methods = nonNativeTypes.filter((property) => {
+            return property.subtype != null;
+        }).map((property) => {
             let methodName = 'insertOrUpdate';
             if (property.type.indexOf(languageDefinition.arrayKeyword) > -1) {
                 methodName = 'batchInsertOrUpdate';

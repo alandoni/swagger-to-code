@@ -34,13 +34,17 @@ ${body}
         }).join(', ');
     }
 
-    printValues(values) {
+    printValues(values, shouldBreakLine) {
         if (!values || values.length === 0) {
             return '';
         }
+        let separator = ', ';
+        if (shouldBreakLine) {
+            separator = ',\n\t\t\t';
+        }
         return values.map((value) => {
             return `${value}`;
-        }).join(', ');
+        }).join(separator);
     }
 
     fieldDeclaration(visibility, name, type, defaultValue) {
@@ -57,7 +61,11 @@ ${body}
         if (caller) {
             callerString = `${caller}.`;
         }
-        return `${callerString}${methodName}(${this.printValues(parameterValues)})`;
+        let shouldBreakLine = true;
+        if (parameterValues.length < 4) {
+            shouldBreakLine = false;
+        }
+        return `${callerString}${methodName}(${this.printValues(parameterValues, shouldBreakLine)})`;
     }
 
     variableDeclaration(declareType, type, name, defaultValue) {
@@ -78,6 +86,10 @@ ${parameters.map((value) => {
         return `\t\tthis.${value.name} = ${value.name};`;
     }).join('\n')}
 \t}`;
+    }
+
+    get constructorAlsoDeclareFields() {
+        return false;
     }
 
     enumDeclaration(enumName, values) {
@@ -107,7 +119,7 @@ ${parameters.map((value) => {
     }
 
     ifNullStatement(object, body) {
-        return this.ifStatement(object, body);
+        return this.ifStatement(`!${object}`, body);
     }
 
     assignment(name1, name2) {

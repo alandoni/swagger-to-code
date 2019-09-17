@@ -53,17 +53,22 @@ ${body}
             if (declareKeyword) {
                 declareString = `${declareKeyword} `;
             }
-            return `${declareString}${parameter.name} : ${parameter.type}`;
+            return `${declareString}${parameter.name} : ${parameter.type.print(this)}`;
         }).join(separator);
     }
 
-    printValues(values) {
+    printValues(values, shouldBreakLine) {
         if (!values || values.length === 0) {
             return '';
         }
+
+        let separator = ', ';
+        if (shouldBreakLine) {
+            separator = ',\n\t\t';
+        }
         return values.map((value) => {
             return `${value}`;
-        }).join(', ');
+        }).join(separator);
     }
 
     fieldDeclaration(visibility, name, type, defaultValue) {
@@ -84,7 +89,11 @@ ${body}
         if (caller) {
             callerString = `${caller}.`;
         }
-        return `${callerString}${methodName}(${this.printValues(parameterValues)})`;
+        let shouldBreakLine = true;
+        if (parameterValues.length < 4) {
+            shouldBreakLine = false;
+        }
+        return `${callerString}${methodName}(${this.printValues(parameterValues, shouldBreakLine)})`;
     }
 
     variableDeclaration(declareType, type, name, defaultValue) {
@@ -104,13 +113,17 @@ ${body}
         if (properties.length < 2) {
             shouldBreakLine = false;
         }
-        return `(${this.printParametersNamesWithTypes(properties, LanguageDefinition.constKeyword, shouldBreakLine)})`;
+        return `(${this.printParametersNamesWithTypes(properties, this.constKeyword, shouldBreakLine)})`;
     }
 
     constructorDeclaration(className, parameters, returnType, body, isDataClass) {
         return `${className}${this.constructorProperties(parameters)} {
     ${body}
 \t}`;
+    }
+
+    get constructorAlsoDeclareFields() {
+        return true;
     }
 
     enumDeclaration(enumName, values) {

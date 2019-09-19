@@ -1,8 +1,9 @@
 class TypeDefinition {
-  constructor(name, isNativeType, subtype) {
+  constructor(name, isNative, subtype, isEnum) {
     this.name = name;
     this.subtype = subtype;
-    this.isNativeType = isNativeType;
+    this.isNative = isNative;
+    this.isEnum = isEnum;
   }
 
   print(languageDefinition) {

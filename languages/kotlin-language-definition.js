@@ -21,7 +21,7 @@ class KotlinLanguageDefinition extends LanguageDefinition {
         if (properties) {
             constructor = this.constructorProperties(properties);
         }
-        return `${classType} ${className}${constructor}${inherits} {\n${body}\n}`;
+        return `${classType} ${className}${constructor}${inherits} {\n\n${body}\n}`;
     }
 
     parameterDeclaration(parameterName, type) {
@@ -63,8 +63,11 @@ ${body}
         }
 
         let separator = ', ';
+        if (values[0].indexOf('\t') > -1 || (values.length > 1 && values[1].indexOf('\t') > -1)) {
+            separator = ',\n\t\t\t';
+        }
         if (shouldBreakLine) {
-            separator = ',\n\t\t';
+            separator = ',\n\t\t\t';
         }
         return values.map((value) => {
             return `${value}`;
@@ -76,7 +79,7 @@ ${body}
         if (visibility.length > 0) {
             visibilityString = `${visibility} `;
         }
-        let field = `${visibilityString}val ${name} : ${type}`;
+        let field = `${visibilityString}val ${name} : ${type.print()}`;
         if (defaultValue) {
             field += ` = ${defaultValue}`;
         }
@@ -90,7 +93,7 @@ ${body}
             callerString = `${caller}.`;
         }
         let shouldBreakLine = true;
-        if (parameterValues.length < 4) {
+        if (parameterValues && parameterValues.length < 3) {
             shouldBreakLine = false;
         }
         return `${callerString}${methodName}(${this.printValues(parameterValues, shouldBreakLine)})`;

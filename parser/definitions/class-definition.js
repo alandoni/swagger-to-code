@@ -1,15 +1,18 @@
 class ClassDefinition {
-    constructor(name, properties, constructors, methods, enums = [], dependencies = []) {
+    constructor(name, properties, constructors, methods, enums = [], dependencies = [], isDataClass = false) {
         this.name = name;
         this.properties = properties;
         this.constructors = constructors;
         this.methods = methods;
         this.enums = enums;
         this.dependencies = dependencies;
+        this.isDataClass = isDataClass;
     }
 
     print(languageDefinition) {
-        const imports = languageDefinition.importDeclarations(this.dependencies);
+        const imports = languageDefinition.importDeclarations(this.dependencies.map((dependency) => {
+            return dependency.print();
+        }));
 
         let constructors = '';
 
@@ -23,13 +26,16 @@ class ClassDefinition {
             return `\t${method.print(languageDefinition)}`;
         }).join('\n\n');
 
-        const enums = this.enums.map((enumDeclaration) => {
-            return `${enumDeclaration.print(languageDefinition)}`;
-        }).join('\n\n');
+        let enums = '';
+        if (this.enums) {
+            enums = this.enums.map((enumDeclaration) => {
+                return `${enumDeclaration.print(languageDefinition)}`;
+            }).join('\n\n');
+        }
 
         let properties = '';        
-        if (!languageDefinition.useDataclassForModels) {
-            if (languageDefinition.needDeclareFields) {
+        if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
+            if (languageDefinition.needDeclareFields || !this.isDataClass) {
                 properties = this.properties.map((property) => {
                     return `\t${property.print(languageDefinition)}`;
                 }).join('\n\n');
@@ -42,9 +48,9 @@ class ClassDefinition {
         }).join('\n\n');
 
         let modelClassString;
-        if (!languageDefinition.useDataclassForModels) {
+        if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
             modelClassString = languageDefinition.classDeclaration(this.name, null, classBody);
-        } else {
+        } else{
             modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, true, this.properties);
         }
         return [imports, modelClassString].join('\n\n');

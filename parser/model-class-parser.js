@@ -1,5 +1,5 @@
 const PropertyDefinition = require('./definitions/property-definition');
-const ConstrutorDefinition = require('./definitions/constructor-definitions');
+const ConstrutorDefinition = require('./definitions/constructor-definition');
 const MethodDefinition = require('./definitions/method-definition');
 const EnumDefinition = require('./definitions/enum-definition');
 const ClassDefinition = require('./definitions/class-definition');
@@ -7,51 +7,51 @@ const TypeDefinition = require('./definitions/type-definition');
 
 module.exports = class ModelClassParser {
     parse(languageDefinition, definition) {
-        const className = definition[0];
-        const properties = this.parseProperties(languageDefinition, definition[1].properties, definition[1].required);
+        const className = definition.name;
+        const properties = ModelClassParser.parseProperties(languageDefinition, definition.properties, definition.requiredProperties);
         
-        const dependencies = [];
-        
-        properties.map((property) => {
-            if (property.type.subtype) {
-                if (property.type.subtype.isNative) {
-                    dependencies.push(subtype);
-                }
-            } else {
-                if (property.type.isNative) {
-                    dependencies.push(property.type);
-                }
-            }
-        });
+        const dependencies = ModelClassParser.parseDependencies(properties);
 
-        const enums = this.parseEnums(definition[1].properties);
+        const enums = this.parseEnums(definition.properties);
 
         const methods = [this.getCopyMethod(languageDefinition, className, properties),
             this.getIsEqualMethod(languageDefinition, className, properties)];
 
         const constructors = [this.parseConstructors(className, properties)];
 
-        return new ClassDefinition(className, properties, constructors, methods, enums, dependencies);
+        return new ClassDefinition(className, properties, constructors, methods, enums, dependencies, true);
+    }
+
+    static parseDependencies(properties) {
+        return properties.map((property) => {
+            if (property.type.subtype) {
+                if (!property.type.subtype.isNative) {
+                    return property.type.subtype;
+                }
+                return null;
+            } else {
+                if (!property.type.isNative) {
+                    return property.type;
+                }
+                return null;
+            }
+        }).filter((property) => {
+            return property != null;
+        });
     }
 
     parseConstructors(className, properties) {
         return new ConstrutorDefinition(className, properties);
     }
 
-    parseProperties(properties) {
-        return properties.map((property) => {
-            return new PropertyDefinition(property.name, property.type, null, false, false);
-        });
-    }
-
     parseEnums(properties) {
-        return Object.entries(properties).map((property) => {
-            if (!property[1].enum) {
+        return properties.map((property) => {
+            if (!property.enum) {
                 return null;
             }
 
-            const enumName = property[0].substr(0, 1).toUpperCase() + property[0].substr(1);
-            return new EnumDefinition(enumName, property[1].enum);
+            const enumName = property.name.substr(0, 1).toUpperCase() + property.name.substr(1);
+            return new EnumDefinition(enumName, property.enum);
         }).filter((elements) => {
             return elements != null;
         });
@@ -98,48 +98,52 @@ module.exports = class ModelClassParser {
             body);
     }
 
-    parseProperties(languageDefinition, properties, requiredProperties) {
-        return Object.entries(properties).map((property) => {
-            const propertyName = property[0];
-            const propertyType = this.getPropertyType(languageDefinition, property[1]);
+    static parseProperties(languageDefinition, properties, requiredProperties) {
+        return properties.map((property) => {
+            const propertyType = this.getPropertyType(languageDefinition, property);
 
             let required = false;
-            if (requiredProperties && requiredProperties.indexOf(propertyName) > -1) {
+            if (requiredProperties && requiredProperties.indexOf(property.name) > -1) {
                 required = true;
             }
 
-            return new PropertyDefinition(propertyName, propertyType, null, required);
+            return new PropertyDefinition(property.name, propertyType, property.default, required);
         });
     }
 
-    getPropertyType(languageDefinition, property) {
-        if (property.type === "string") {
-            return new TypeDefinition(languageDefinition.stringKeyword, true);
-        }
-        if (property.type === "number") {
-            return new TypeDefinition(languageDefinition.numberKeyword, true);
-        }
-        if (property.type === "integer") {
-            return new TypeDefinition(languageDefinition.intKeyword, true);
-        }
-        if (property.type === "boolean") {
-            return new TypeDefinition(languageDefinition.booleanKeyword, true);
-        }
-        if (property.type === "array") {
-            return new TypeDefinition(languageDefinition.arrayKeyword, true, this.getPropertyType(languageDefinition, property.items));
-        }
-        if (property.type === "object") {
-            return new TypeDefinition(languageDefinition.mapKeyword, true);
+    static getPropertyType(languageDefinition, property) {
+        let isEnum = false;
+        if (property.enum) {
+            isEnum = true;
         }
 
-        return new TypeDefinition(this.getTypeReferingToAnotherClass(property), false);
+        if (property.type === 'string') {
+            return new TypeDefinition(languageDefinition.stringKeyword, true, null, isEnum);
+        }
+        if (property.type === 'number') {
+            return new TypeDefinition(languageDefinition.numberKeyword, true, null, isEnum);
+        }
+        if (property.type === 'integer') {
+            return new TypeDefinition(languageDefinition.intKeyword, true, null, isEnum);
+        }
+        if (property.type === 'boolean') {
+            return new TypeDefinition(languageDefinition.booleanKeyword, true, null, isEnum);
+        }
+        if (property.type === 'array') {
+            return new TypeDefinition(languageDefinition.arrayKeyword, true, this.getPropertyType(languageDefinition, property.items), isEnum);
+        }
+        if (property.type === 'object') {
+            return new TypeDefinition(languageDefinition.mapKeyword, true, null, isEnum);
+        }
+
+        return new TypeDefinition(this.getTypeReferingToAnotherClass(property), false, null, isEnum);
     }
 
-    getTypeReferingToAnotherClass(property) {
-        const definitionsString = "#/definitions/";
-        const definitionIndex = property.$ref.indexOf(definitionsString);
+    static getTypeReferingToAnotherClass(property) {
+        const definitionsString = '#/definitions/';
+        const definitionIndex = property.type.indexOf(definitionsString);
         if (definitionIndex > -1) {
-            return property.$ref.substr(definitionIndex + definitionsString.length);
+            return property.type.substr(definitionIndex + definitionsString.length);
         }
     }
 }

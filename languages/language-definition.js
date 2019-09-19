@@ -12,7 +12,7 @@ class LanguageDefinition {
         if (inheritsFrom) {
             inherits = ` extends ${inheritsFrom}`;
         }
-        return `class ${className}${inherits} {\n${body}\n}`;
+        return `class ${className}${inherits} {\n\n${body}\n}`;
     }
 
     parameterDeclaration(parameterName, type) {

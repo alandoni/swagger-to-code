@@ -15,7 +15,7 @@ class PropertyDefinition {
         return languageDefinition.fieldDeclaration(
             visibility, 
             this.name, 
-            this.type.print(languageDefinition),
+            this.type,
             this.value);
     }
 }

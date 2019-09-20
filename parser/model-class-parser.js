@@ -65,7 +65,7 @@ module.exports = class ModelClassParser {
         
         const body = `\t\t${languageDefinition.returnDeclaration(constructObject)}`;
 
-        return new MethodDefinition('copy', className, null, body);
+        return new MethodDefinition('copy', new TypeDefinition(className), null, body);
     }
 
     getIsEqualMethod(languageDefinition, className, properties) {
@@ -93,7 +93,7 @@ module.exports = class ModelClassParser {
         body += `\n\t\t${languageDefinition.returnDeclaration(languageDefinition.trueKeyword)}`;
         return new MethodDefinition(
             'isEqual',
-            languageDefinition.booleanKeyword,
+            new TypeDefinition(languageDefinition.booleanKeyword),
             [new PropertyDefinition('obj', new TypeDefinition(languageDefinition.anyTypeKeyword))],
             body);
     }

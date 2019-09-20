@@ -16,7 +16,7 @@ class ClassDefinition {
 
         let constructors = '';
 
-        if (!languageDefinition.constructorAlsoDeclareFields) {
+        if (!languageDefinition.constructorAlsoDeclareFields && this.constructors) {
             constructors = this.constructors.map((construct) => {
                 return `\t${construct.print(languageDefinition)}`;
             }).join('\n\n');

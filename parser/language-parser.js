@@ -42,17 +42,12 @@ class LanguageParser {
             const clasz = {
                 model: modelParser.parse(languageDefinition, definition[1]),
             };
+            console.log(clasz.model.print(languageDefinition));
             if (definition[1].needsTable) {
                 clasz.tableClasses = tableSchemaParser.parse(languageDefinition, sqliteLanguageDefinition, definition[1]);
-            }
-            return clasz;
-        });
-
-        classes.map((clasz) => {
-            console.log(clasz.model.print(languageDefinition));
-            if (clasz.tableClasses) {
                 console.log(clasz.tableClasses.print(languageDefinition));
             }
+            return clasz;
         });
 
         return classes;

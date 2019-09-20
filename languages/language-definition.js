@@ -26,12 +26,16 @@ ${body}
     }
 
     printParametersNamesWithTypes(parameters, declareKeyword, shouldBreakLine = false) {
+        let separator = ', ';
+        if (shouldBreakLine) {
+            separator = ',\n\t\t';
+        }
         if (!parameters || parameters.length == 0) {
             return '';
         }
         return parameters.map((parameter) => {
             return parameter.name;
-        }).join(', ');
+        }).join(separator);
     }
 
     printValues(values, shouldBreakLine) {
@@ -39,6 +43,9 @@ ${body}
             return '';
         }
         let separator = ', ';
+        if (values[0].indexOf('\t') > -1 || (values.length > 1 && values[1].indexOf('\t') > -1)) {
+            separator = ',\n\t\t\t';
+        }
         if (shouldBreakLine) {
             separator = ',\n\t\t\t';
         }
@@ -62,7 +69,7 @@ ${body}
             callerString = `${caller}.`;
         }
         let shouldBreakLine = true;
-        if (parameterValues.length < 4) {
+        if (parameterValues && parameterValues.length < 3) {
             shouldBreakLine = false;
         }
         return `${callerString}${methodName}(${this.printValues(parameterValues, shouldBreakLine)})`;

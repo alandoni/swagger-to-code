@@ -31,7 +31,7 @@ class KotlinLanguageDefinition extends LanguageDefinition {
     methodDeclaration(methodName, parameters, returnType, body) {
         let returnString = '';
         if (returnType) {
-            returnString = ` : ${returnType}`;
+            returnString = ` : ${returnType.print()}`;
         }
 
         return `fun ${methodName}(${this.printParametersNamesWithTypes(parameters)})${returnString} {

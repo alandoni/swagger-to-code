@@ -53,12 +53,12 @@ module.exports = class DatabaseTableSchemaClassParser {
         const methods = [
             this.createCreateTableMethod(languageDefinition, databaseLanguageDefinition, fields),
             this.createReadFromDbMethod(languageDefinition, databaseLanguageDefinition, className, fields),
-            /*this.createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, fields),
-            this.createBatchInsertOrUpdateMethod(languageDefinition, classDefinition),
+            this.createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, className, fields),
+            this.createBatchInsertOrUpdateMethod(languageDefinition, className),
             this.createDeleteMethod(languageDefinition, databaseLanguageDefinition),
-            this.createReadListFromDbMethod(languageDefinition, classDefinition),
-            this.createSelectAllMethod(languageDefinition, databaseLanguageDefinition, classDefinition),
-            this.createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, classDefinition),*/
+            this.createReadListFromDbMethod(languageDefinition, className),
+            this.createSelectAllMethod(languageDefinition, databaseLanguageDefinition, className),
+            this.createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, className),
         ];
 
         const properties = [tableNameString, ...fields.map((field) => {
@@ -105,8 +105,10 @@ module.exports = class DatabaseTableSchemaClassParser {
         let methodString = `\t\t${languageDefinition.methodCall('db', 'execSQL', [methodCall])};`;
 
         return new MethodDefinition('createTable', 
-            languageDefinition.voidReturnKeyword,
-            [this.databaseObject],
+            new TypeDefinition(languageDefinition.voidReturnKeyword),
+            [
+                this.databaseObject
+            ],
             methodString,
             languageDefinition.publicKeyword);
     }
@@ -139,8 +141,13 @@ module.exports = class DatabaseTableSchemaClassParser {
             varName, languageDefinition.constructObject(className, parameters))}`;
         methodString += `\n\t\t${languageDefinition.returnDeclaration(varName)}`;
 
-        return new MethodDefinition('readFromDb', className, [new PropertyDefinition('cursor', new TypeDefinition('Cursor'))],
-            methodString, languageDefinition.publicKeyword);
+        return new MethodDefinition('readFromDb', 
+            new TypeDefinition(className),
+            [   
+                new PropertyDefinition('cursor', new TypeDefinition('Cursor')),
+            ],
+            methodString,
+            languageDefinition.publicKeyword);
     }
 
     handleNonNativeTypes(languageDefinition, className, field) {
@@ -169,11 +176,11 @@ module.exports = class DatabaseTableSchemaClassParser {
         return null;
     }
 
-    createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, classDefinition, properties) {
+    createInsertOrUpdateMethod(languageDefinition, databaseLanguageDefinition, className, properties) {
         const interrogations = [];
         const stringReplacements = [];
 
-        const objectName = this.classNameToVar(classDefinition);
+        const objectName = this.classNameToVar(className);
 
         const { onlyNativeTypes, nonNativeTypes } = this.getFieldsSeparatedByNative(languageDefinition, properties)
 
@@ -184,6 +191,7 @@ module.exports = class DatabaseTableSchemaClassParser {
 
         const sql = `${languageDefinition.stringDeclaration(
             `${databaseLanguageDefinition.insertOrUpdateKeyword} \`${languageDefinition.stringReplacement}\` (${stringReplacements.join(', ')}) ${databaseLanguageDefinition.valuesKeyword} (${interrogations.join(', ')})`)}`;
+        
         const statement = `${languageDefinition.methodCall(sql, 'format', this.getFields(languageDefinition, onlyNativeTypes, objectName))}`;
         
         const callExecSqlMethod = languageDefinition.methodCall('db', 'execSQL', [statement]);
@@ -192,12 +200,14 @@ module.exports = class DatabaseTableSchemaClassParser {
             methodString = this.getInsertMethodForNonNativeTypes(languageDefinition, nonNativeTypes, objectName, methodString, statement);
         }
 
-        return `\t${languageDefinition.methodDeclaration('insertOrUpdate', 
+        return new MethodDefinition('insertOrUpdate',
+            new TypeDefinition(languageDefinition.intKeyword),
             [
-                new PropertyDefinition('db', 'SQLiteDatabase'), 
-                new PropertyDefinition(`${objectName}`, `${classDefinition.name}`)
+                this.databaseObject,
+                new PropertyDefinition(`${objectName}`, new TypeDefinition(`${className}`))
             ],
-            languageDefinition.intKeyword, methodString)}`;
+            methodString,
+            languageDefinition.publicKeyword);
     }
 
     getInsertMethodForNonNativeTypes(languageDefinition, nonNativeTypes, objectName, methodString, statement) {
@@ -213,7 +223,11 @@ module.exports = class DatabaseTableSchemaClassParser {
         }).join('\n');
 
         const callExecSqlMethod = languageDefinition.methodCall('db', 'execSQL', [statement]);
-        methodString = `\t\t${languageDefinition.variableDeclaration(languageDefinition.constKeyword, languageDefinition.intKeyword, 'result', callExecSqlMethod)}
+        methodString = `\t\t${languageDefinition.variableDeclaration(
+            languageDefinition.constKeyword, 
+            new TypeDefinition(languageDefinition.intKeyword), 
+            'result',
+            callExecSqlMethod)}
 
 ${methods}
 
@@ -225,9 +239,7 @@ ${methods}
         const onlyNativeTypes = [];
         const nonNativeTypes = [];
         properties.forEach((property) => {
-            if (languageDefinition.nativeTypes.indexOf(property.type) > -1 || 
-                    (property.type.indexOf(languageDefinition.arrayKeyword) > -1 && property.subtype === languageDefinition.stringKeyword) ||
-                    property.enumDefinition) {
+            if (property.type.isNative > -1 || this.isArrayOfString(languageDefinition, property.type) || property.enumDefinition) {
                 onlyNativeTypes.push(property);
             } else {
                 nonNativeTypes.push(property);
@@ -237,35 +249,37 @@ ${methods}
     }
 
     getFields(languageDefinition, properties, objectName) {
-        const fields = [`\n\t\t\t${languageDefinition.thisKeyword}.TABLE_NAME`];
-        fields.push(properties.map((property) => {
-            return `\n\t\t\t${languageDefinition.thisKeyword}.${property.field}`;
+        let fields = [`${languageDefinition.thisKeyword}.TABLE_NAME`];
+        fields = fields.concat(properties.map((property) => {
+            return `${languageDefinition.thisKeyword}.${property.fieldName}`;
         }));
         
-        fields.push(properties.map((property) => {
+        fields = fields.concat(properties.map((property) => {
             if (property.subtype === languageDefinition.stringKeyword) {
-                return `\n\t\t\t${languageDefinition.methodCall(`${objectName}.${property.name}`, 'join', 
+                return `${languageDefinition.methodCall(`${objectName}.${property.propertyName}`, 'join', 
                     [languageDefinition.stringDeclaration(STRING_TO_ARRAY_SEPARATOR)])}`;
             }
-            return `\n\t\t\t${objectName}.${property.name}`;
+            return `${objectName}.${property.propertyName}`;
         }));
         return fields;
     }
 
-    createBatchInsertOrUpdateMethod(languageDefinition, classDefinition) {
-        const objectName = this.classNameToVar(classDefinition);
+    createBatchInsertOrUpdateMethod(languageDefinition, className) {
+        const objectName = this.classNameToVar(className);
 
         const callInsertOrUpdateMethod = languageDefinition.methodCall(languageDefinition.thisKeyword, 'insertOrUpdate', ['db', objectName]);
         let mapBodyString = `\t\t\t${languageDefinition.returnDeclaration(callInsertOrUpdateMethod)}`;
-        const callMapMethod = languageDefinition.lambdaMethod(`${objectName}s`, 'map', objectName, mapBodyString);
+        const callMapMethod = languageDefinition.lambdaMethod(objectName, 'map', objectName, mapBodyString);
         let methodString = `\t\t${languageDefinition.returnDeclaration(callMapMethod)}`;
 
-        return `\t${languageDefinition.methodDeclaration('batchInsertOrUpdate', 
+        return new MethodDefinition('batchInsertOrUpdate',
+            new TypeDefinition(languageDefinition.arrayKeyword, true, new TypeDefinition(languageDefinition.intKeyword)),
             [
-                new PropertyDefinition('db', 'SQLiteDatabase'), 
-                new PropertyDefinition(`${objectName}s`, `${languageDefinition.arrayKeyword}<${classDefinition.name}>`)
+                this.databaseObject, 
+                new PropertyDefinition(objectName, new TypeDefinition(languageDefinition.arrayKeyword, true, new TypeDefinition(className))),
             ],
-            `${languageDefinition.arrayKeyword}<${languageDefinition.intKeyword}>`, methodString)}`;
+            methodString,
+            languageDefinition.publicKeyword);
     }
 
     createDeleteMethod(languageDefinition, databaseLanguageDefinition) {
@@ -278,15 +292,18 @@ ${methods}
 
         const dbExecCall = languageDefinition.methodCall('db', 'execSQL', [formatMethodCall, 'id']);
         const returnCall = `\t\t${languageDefinition.returnDeclaration(dbExecCall)}`;
-        return `\t${languageDefinition.methodDeclaration('deleteById', 
-        [
-            new PropertyDefinition('db', 'SQLiteDatabase'), 
-            new PropertyDefinition('id', languageDefinition.intKeyword)
-        ], languageDefinition.intKeyword, returnCall)}`;
+        return new MethodDefinition('deleteById',
+            new TypeDefinition(languageDefinition.intKeyword),
+            [
+                this.databaseObject, 
+                new PropertyDefinition('id', new TypeDefinition(languageDefinition.intKeyword)),
+            ],
+            returnCall,
+            languageDefinition.publicKeyword);
     }
 
-    createReadListFromDbMethod(languageDefinition, classDefinition) {
-        const listDeclaration = this.createListObject(languageDefinition, classDefinition);
+    createReadListFromDbMethod(languageDefinition, className) {
+        const listDeclaration = this.createListObject(languageDefinition, className);
 
         const cursorMoveToNext = languageDefinition.methodCall('cursor', 'moveToNext');
         const readFromDbMethodCall = languageDefinition.methodCall('readFromDb', ['cursor']);
@@ -297,42 +314,27 @@ ${methods}
         const methodBody = `\t\t${listDeclaration}
 \t\t${whileStatement}
 \t\t${returnCall}`
-        return `\t${languageDefinition.methodDeclaration('readListFromDb', 
-        [
-            new PropertyDefinition('cursor', 'Cursor'),
-        ], languageDefinition.intKeyword, methodBody)}`;
+        return new MethodDefinition('readListFromDb', 
+            new TypeDefinition(languageDefinition.intKeyword),
+            [
+                new PropertyDefinition('cursor', new TypeDefinition('Cursor')),
+            ],
+            methodBody,
+            languageDefinition.publicKeyword);
     }
 
-    createListObject(languageDefinition, classDefinition) {
+    createListObject(languageDefinition, className) {
         let listConstruct = languageDefinition.arrayListKeyword;
         if (languageDefinition.shouldConstructList) {
             listConstruct = languageDefinition.constructObject(languageDefinition.arrayListKeyword);
         }
-        const listDeclaration = languageDefinition.variableDeclaration(languageDefinition.constKeyword, `${languageDefinition.arrayListKeyword}<${classDefinition.name}>`, 'list', listConstruct);
+        const listDeclaration = languageDefinition.variableDeclaration(languageDefinition.constKeyword, `${languageDefinition.arrayListKeyword}<${className}>`, 'list', listConstruct);
         return listDeclaration;
     }
 
-    createSelectAllMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
-        const sql = languageDefinition.stringDeclaration(
-            `${databaseLanguageDefinition.selectAllFieldsKeyword} ${databaseLanguageDefinition.fromKeyword} ${languageDefinition.stringReplacement}`
-        );
-
-        const formatMethodCall = languageDefinition.methodCall(sql, 'format', 
-            [`${languageDefinition.thisKeyword}.TABLE_NAME`]);
-
-        const dbExecCall = languageDefinition.methodCall('db', 'rawQuery', [formatMethodCall]);
-        
-        const methodBody = this.selectMethodBody(languageDefinition, classDefinition, dbExecCall);
-
-        return `\t${languageDefinition.methodDeclaration('selectAll', 
-        [
-            new PropertyDefinition('db', 'SQLiteDatabase')
-        ], `${languageDefinition.arrayKeyword}<${classDefinition.name}>`, methodBody)}`;
-    }
-
-    selectMethodBody(languageDefinition, classDefinition, dbExecCall) {
+    selectMethodBody(languageDefinition, className, dbExecCall) {
         const cursorDeclaration = languageDefinition.variableDeclaration(languageDefinition.variableKeyword, 'Cursor', 'cursor');
-        const listDeclaration = this.createListObject(languageDefinition, classDefinition);
+        const listDeclaration = this.createListObject(languageDefinition, className);
         const assignRawQueryToCursor = languageDefinition.assignment('cursor', dbExecCall);
         const callReadListFromDbMethod = languageDefinition.methodCall(languageDefinition.thisKeyword, 'readListFromDb', ['cursor']);
         const assignList = languageDefinition.assignment('list', callReadListFromDbMethod);
@@ -352,7 +354,28 @@ ${returnCall}`;
         return methodBody;
     }
 
-    createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, classDefinition) {
+    createSelectAllMethod(languageDefinition, databaseLanguageDefinition, className) {
+        const sql = languageDefinition.stringDeclaration(
+            `${databaseLanguageDefinition.selectAllFieldsKeyword} ${databaseLanguageDefinition.fromKeyword} ${languageDefinition.stringReplacement}`
+        );
+
+        const formatMethodCall = languageDefinition.methodCall(sql, 'format', 
+            [`${languageDefinition.thisKeyword}.TABLE_NAME`]);
+
+        const dbExecCall = languageDefinition.methodCall('db', 'rawQuery', [formatMethodCall]);
+        
+        const methodBody = this.selectMethodBody(languageDefinition, className, dbExecCall);
+
+        return new MethodDefinition('selectAll', 
+            new TypeDefinition(languageDefinition.arrayKeyword, true, new TypeDefinition(className)),
+            [
+                this.databaseObject,
+            ],
+            methodBody,
+            languageDefinition.publicKeyword);
+    }
+
+    createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, className) {
         const sql = languageDefinition.stringDeclaration(
             `${databaseLanguageDefinition.selectAllFieldsKeyword} ${databaseLanguageDefinition.fromKeyword} ${languageDefinition.stringReplacement} ${databaseLanguageDefinition.whereKeyword} ${languageDefinition.stringReplacement} = ${databaseLanguageDefinition.parameterKeyword}`
         );
@@ -362,13 +385,16 @@ ${returnCall}`;
 
         const dbExecCall = languageDefinition.methodCall('db', 'rawQuery', [formatMethodCall, 'id']);
 
-        const methodBody = this.selectMethodBody(languageDefinition, classDefinition, dbExecCall);
+        const methodBody = this.selectMethodBody(languageDefinition, className, dbExecCall);
 
-        return `\t${languageDefinition.methodDeclaration('selectById', 
-        [
-            new PropertyDefinition('db', 'SQLiteDatabase'), 
-            new PropertyDefinition('id', languageDefinition.intKeyword)
-        ], languageDefinition.intKeyword, methodBody)}`;
+        return new MethodDefinition('selectById',
+            new TypeDefinition(languageDefinition.intKeyword),
+            [
+                this.databaseObject,
+                new PropertyDefinition('id', new TypeDefinition(languageDefinition.intKeyword)),
+            ],
+            methodBody,
+            languageDefinition.publicKeyword);
     }
 }
 

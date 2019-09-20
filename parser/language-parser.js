@@ -70,16 +70,25 @@ class LanguageParser {
         });
 
         Object.entries(preparedDefinitions).filter((definition) => {
-            return definition[1].properties.filter((property) => {
-                const refersTo = property.items && ModelClassParser.getTypeReferingToAnotherClass(property.items);
-                return property.type === 'array' && refersTo &&
-                    preparedDefinitions[refersTo].needsTable;
-            }).length > 0;
-        }).map((definition) => { // All definitions that depends on array of other definition on database
-            const arrayProperty = definition[1].properties.find((property) => {
-                return property.items && ModelClassParser.getTypeReferingToAnotherClass(property.items);
+            definition[1].properties.filter((property) => {
+                const refersTo = property.items && LanguageParser.getTypeReferingToAnotherClass(property.items);
+                return property.type === 'array' && refersTo && preparedDefinitions[refersTo].needsTable;
+            }).map((property) => { // All properties that depends on array of other definition on database
+                const refersTo = preparedDefinitions[LanguageParser.getTypeReferingToAnotherClass(property.items)];
+                property.items.type = refersTo;
+                property.setReference(refersTo);
+                definition[1].addReference(refersTo);
             });
-            definition[1].addReference(preparedDefinitions[ModelClassParser.getTypeReferingToAnotherClass(arrayProperty.items)]);
+
+            definition[1].properties.filter((property) => {
+                const refersTo = property.type && LanguageParser.getTypeReferingToAnotherClass(property);
+                return refersTo;
+            }).map((property) => {  // All properties that depends on other definition on database
+                const refersTo = preparedDefinitions[LanguageParser.getTypeReferingToAnotherClass(property)];
+                property.type = refersTo;
+                property.setReference(refersTo);
+                definition[1].addReference(refersTo);
+            });
         });
 
         return preparedDefinitions;
@@ -118,6 +127,14 @@ class LanguageParser {
 
         if (JSON.stringify(newDefinitions) !== '{}') {
             this.createDefinitionsFromProperties(Object.entries(newDefinitions));
+        }
+    }
+
+    static getTypeReferingToAnotherClass(property) {
+        const definitionsString = '#/definitions/';
+        const definitionIndex = property.type.indexOf(definitionsString);
+        if (definitionIndex > -1) {
+            return property.type.substr(definitionIndex + definitionsString.length);
         }
     }
 }
@@ -166,6 +183,10 @@ class DefinitionPropertiesHelper {
                 property[1].requiredProperties ? property[1].requiredProperties.indexOf(property[0]) > -1 : false,
                 property[1].properties || []);
         });
+    }
+
+    setReference(reference) {
+        this.refersTo = reference;
     }
 }
 

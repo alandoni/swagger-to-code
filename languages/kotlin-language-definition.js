@@ -8,7 +8,7 @@ class KotlinLanguageDefinition extends LanguageDefinition {
         }).join('\n');
     }
 
-    classDeclaration(className, inheritsFrom, body, isDataClass, properties) {
+    classDeclaration(className, inheritsFrom, body, isDataClass, constructors) {
         let classType = 'class';
         if (isDataClass) {
             classType = 'data class';
@@ -18,19 +18,15 @@ class KotlinLanguageDefinition extends LanguageDefinition {
             inherits = ` : ${inheritsFrom}`;
         }
         let constructor = '';
-        if (properties) {
-            constructor = this.constructorProperties(properties);
+        if (constructors && constructors.length > 0) {
+            constructor = this.constructorProperties(constructors[0].properties);
         }
         return `${classType} ${className}${constructor}${inherits} {\n\n${body}\n}`;
     }
 
-    parameterDeclaration(parameterName, type) {
-        return `${type} ${parameterName}`;
-    }
-
     methodDeclaration(methodName, parameters, returnType, body) {
         let returnString = '';
-        if (returnType) {
+        if (returnType && returnType.print() && returnType.print().length > 0) {
             returnString = ` : ${returnType.print()}`;
         }
 
@@ -39,7 +35,7 @@ ${body}
 \t}`;
     }
 
-    printParametersNamesWithTypes(parameters, declareKeyword, shouldBreakLine = false) {
+    printParametersNamesWithTypes(parameters, shouldBreakLine = false) {
         let separator = ', ';
         if (shouldBreakLine) {
             separator = ',\n\t\t';
@@ -49,12 +45,16 @@ ${body}
             return '';
         }
         return parameters.map((parameter) => {
-            let declareString = ''
-            if (declareKeyword) {
-                declareString = `${declareKeyword} `;
-            }
-            return `${declareString}${parameter.name} : ${parameter.type.print(this)}`;
+            return parameter.print(this);
         }).join(separator);
+    }
+
+    parameterDeclaration(parameter) {
+        let declareString = parameter.modifiers ? parameter.modifiers.join(' ') : '';
+        if (declareString.length > 1) {
+            declareString = `${declareString} `;
+        }
+        return `${declareString}${parameter.name} : ${parameter.type.print(this)}`;
     }
 
     printValues(values, shouldBreakLine) {
@@ -100,7 +100,7 @@ ${body}
     }
 
     variableDeclaration(declareType, type, name, defaultValue) {
-        let variable = `${declareType} ${name} : ${type}`;
+        let variable = `${declareType} ${name} : ${type.print()}`;
         if (defaultValue) {
             variable += ` = ${defaultValue}`;
         }
@@ -116,7 +116,7 @@ ${body}
         if (properties.length < 2) {
             shouldBreakLine = false;
         }
-        return `(${this.printParametersNamesWithTypes(properties, this.constKeyword, shouldBreakLine)})`;
+        return `(${this.printParametersNamesWithTypes(properties, shouldBreakLine)})`;
     }
 
     constructorDeclaration(className, parameters, returnType, body, isDataClass) {
@@ -251,12 +251,16 @@ ${body}
     }
 
     equalMethod(var1, var2, negative) {
-        const equals = `${var1}.equals(${var2})`;
+        const equals = `${var1}.${this.equalMethodName}(${var2})`;
         if (negative) {
             return `!${equals}`;
         } else {
             return equals;
         }
+    }
+
+    get equalMethodName() {
+        return 'equals';
     }
 
     simpleComparison(var1, var2, negative) {
@@ -265,6 +269,10 @@ ${body}
             equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
+    }
+
+    get varargsKeyword() {
+        return 'varargs';
     }
 }
 

@@ -15,17 +15,13 @@ class LanguageDefinition {
         return `class ${className}${inherits} {\n\n${body}\n}`;
     }
 
-    parameterDeclaration(parameterName, type) {
-        return parameterName;
-    }
-
     methodDeclaration(methodName, parameters, returnType, body) {
         return `${methodName}(${this.printParametersNamesWithTypes(parameters)}) {
 ${body}
 \t}`;
     }
 
-    printParametersNamesWithTypes(parameters, declareKeyword, shouldBreakLine = false) {
+    printParametersNamesWithTypes(parameters, shouldBreakLine = false) {
         let separator = ', ';
         if (shouldBreakLine) {
             separator = ',\n\t\t';
@@ -36,6 +32,10 @@ ${body}
         return parameters.map((parameter) => {
             return parameter.name;
         }).join(separator);
+    }
+
+    parameterDeclaration(parameter) {
+        return parameter.name
     }
 
     printValues(values, shouldBreakLine) {
@@ -235,12 +235,20 @@ ${parameters.map((value) => {
         return `${var1} ${equal} ${var2}`;
     }
 
+    get equalMethodName() {
+        return 'isEqual';
+    }
+
     simpleComparison(var1, var2, negative) {
         let equal = '==';
         if (negative) {
             equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
+    }
+
+    get varargsKeyword() {
+        return '...';
     }
 }
 

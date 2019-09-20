@@ -4,6 +4,7 @@ const MethodDefinition = require('./definitions/method-definition');
 const EnumDefinition = require('./definitions/enum-definition');
 const ClassDefinition = require('./definitions/class-definition');
 const TypeDefinition = require('./definitions/type-definition');
+const ParameterDefinition = require('./definitions/parameter-definition');
 
 module.exports = class ModelClassParser {
     parse(languageDefinition, definition) {
@@ -17,7 +18,7 @@ module.exports = class ModelClassParser {
         const methods = [this.getCopyMethod(languageDefinition, className, properties),
             this.getIsEqualMethod(languageDefinition, className, properties)];
 
-        const constructors = [this.parseConstructors(className, properties)];
+        const constructors = [this.parseConstructors(languageDefinition, className, properties)];
 
         return new ClassDefinition(className, properties, constructors, methods, enums, dependencies, true);
     }
@@ -40,8 +41,10 @@ module.exports = class ModelClassParser {
         });
     }
 
-    parseConstructors(className, properties) {
-        return new ConstrutorDefinition(className, properties);
+    parseConstructors(languageDefinition, className, properties) {
+        return new ConstrutorDefinition(className, properties.map((property) => {
+            return ParameterDefinition.fromProperty(property, [languageDefinition.constKeyword]);
+        }));
     }
 
     parseEnums(properties) {
@@ -92,9 +95,9 @@ module.exports = class ModelClassParser {
 
         body += `\n\t\t${languageDefinition.returnDeclaration(languageDefinition.trueKeyword)}`;
         return new MethodDefinition(
-            'isEqual',
+            languageDefinition.equalMethodName,
             new TypeDefinition(languageDefinition.booleanKeyword),
-            [new PropertyDefinition('obj', new TypeDefinition(languageDefinition.anyTypeKeyword))],
+            [new ParameterDefinition('obj', new TypeDefinition(languageDefinition.anyTypeKeyword))],
             body);
     }
 
@@ -136,14 +139,6 @@ module.exports = class ModelClassParser {
             return new TypeDefinition(languageDefinition.mapKeyword, true, null, isEnum);
         }
 
-        return new TypeDefinition(this.getTypeReferingToAnotherClass(property), false, null, isEnum);
-    }
-
-    static getTypeReferingToAnotherClass(property) {
-        const definitionsString = '#/definitions/';
-        const definitionIndex = property.type.indexOf(definitionsString);
-        if (definitionIndex > -1) {
-            return property.type.substr(definitionIndex + definitionsString.length);
-        }
+        return new TypeDefinition(property.type.name, false, null, isEnum);
     }
 }

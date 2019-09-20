@@ -51,7 +51,7 @@ class ClassDefinition {
         if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
             modelClassString = languageDefinition.classDeclaration(this.name, null, classBody);
         } else{
-            modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, true, this.properties);
+            modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, true, this.constructors);
         }
         return [imports, modelClassString].join('\n\n');
     }

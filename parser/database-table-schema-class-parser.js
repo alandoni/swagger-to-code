@@ -61,6 +61,7 @@ module.exports = class DatabaseTableSchemaClassParser {
             this.createSelectMethod(languageDefinition, className),
             this.createSelectAllMethod(languageDefinition, databaseLanguageDefinition, className),
             this.createSelectByIdMethod(languageDefinition, databaseLanguageDefinition, className),
+            ...this.createMethodsBasedOnDependencies(languageDefinition, databaseLanguageDefinition, definition, className, fields),
         ];
 
         const properties = this.getAllProperties(languageDefinition, tableNameString, fields);
@@ -523,6 +524,36 @@ ${tryCatch}
             ],
             methodBody,
             languageDefinition.publicKeyword);
+    }
+
+    createMethodsBasedOnDependencies(languageDefinition, databaseLanguageDefinition, definition, className, fields) {
+        return definition.references.filter((reference) => {
+            return reference.isArray;
+        }).map((reference) => {
+            const fieldReference = fields.find((field) => {
+                return field.propertyName = reference.property.name;
+            });
+
+            const sql = languageDefinition.stringDeclaration(
+                `${databaseLanguageDefinition.selectAllFieldsKeyword} ${databaseLanguageDefinition.fromKeyword} ${languageDefinition.stringReplacement}`
+            );
+    
+            const formatMethodCall = languageDefinition.methodCall(sql, 'format', 
+                [`${languageDefinition.thisKeyword}.TABLE_NAME`]);
+    
+            const dbExecCall = languageDefinition.methodCall(languageDefinition.thisKeyword, 'select', [formatMethodCall, languageDefinition.nullKeyword]);
+            
+            const returnCall = `\t\t${languageDefinition.returnDeclaration(dbExecCall)}`;
+
+            return new MethodDefinition(`selectBy${reference.definition.name}Id`, 
+                new TypeDefinition(languageDefinition.arrayKeyword, true, new TypeDefinition(className)),
+                [
+                    this.databaseObject,
+                    new ParameterDefinition(fieldReference.propertyName, new TypeDefinition(languageDefinition.stringKeyword)),
+                ],
+                returnCall,
+                languageDefinition.publicKeyword);
+        });
     }
 }
 

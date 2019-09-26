@@ -35,6 +35,7 @@ class LanguageParser {
         const sqliteLanguageDefinition = new SqliteLanguageDefinition();
 
         const preparedDefinitions = this.preparedDefinitions(Object.entries(object.definitions));
+        this.prepareReferences(preparedDefinitions);
 
         this.createDefinitionsFromProperties(Object.entries(preparedDefinitions));
 
@@ -69,6 +70,10 @@ class LanguageParser {
             preparedDefinitions[name] = new DefinitionHelper(name, needsTable, properties, requiredProperties);
         });
 
+        return preparedDefinitions;
+    }
+
+    prepareReferences(preparedDefinitions) {
         Object.entries(preparedDefinitions).filter((definition) => {
             definition[1].properties.filter((property) => {
                 const refersTo = property.items && LanguageParser.getTypeReferingToAnotherClass(property.items);
@@ -77,7 +82,7 @@ class LanguageParser {
                 const refersTo = preparedDefinitions[LanguageParser.getTypeReferingToAnotherClass(property.items)];
                 property.items.type = refersTo;
                 property.setReference(refersTo);
-                definition[1].addReference(refersTo);
+                refersTo.addReference(new DefinitionReferenceHelper(definition[1], property, true));
             });
 
             definition[1].properties.filter((property) => {
@@ -87,11 +92,12 @@ class LanguageParser {
                 const refersTo = preparedDefinitions[LanguageParser.getTypeReferingToAnotherClass(property)];
                 property.type = refersTo;
                 property.setReference(refersTo);
-                definition[1].addReference(refersTo);
+
+                if (refersTo.needsTable) {
+                    definition[1].addReference(new DefinitionReferenceHelper(refersTo, property, false));
+                }
             });
         });
-
-        return preparedDefinitions;
     }
 
     createDefinitionsFromProperties(preparedDefinitions) {
@@ -187,6 +193,14 @@ class DefinitionPropertiesHelper {
 
     setReference(reference) {
         this.refersTo = reference;
+    }
+}
+
+class DefinitionReferenceHelper {
+    constructor(definition, property, isArray) {
+        this.definition = definition;
+        this.property = property;
+        this.isArray = isArray;
     }
 }
 

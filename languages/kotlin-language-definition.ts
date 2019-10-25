@@ -1,4 +1,8 @@
 import LanguageDefinition from './language-definition';
+import ParameterDefinition from '../parser/definitions/parameter-definition';
+import TypeDefinition from '../parser/definitions/type-definition';
+import ConstructorDefinition from '../parser/definitions/constructor-definition';
+import PropertyDefinition from '../parser/definitions/property-definition';
 
 class KotlinLanguageDefinition implements LanguageDefinition {
     fileExtension = 'kt';
@@ -27,13 +31,13 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     constructorAlsoDeclareFields = true;
     needDeclareFields = false;
 
-    importDeclarations(imports): string {
+    importDeclarations(imports: Array<string>): string {
         return imports.map((importFile) => {
             return `import ${importFile};`;
         }).join('\n');
     }
 
-    classDeclaration(className, inheritsFrom, body, isDataClass, constructors): string {
+    classDeclaration(className: string, inheritsFrom: string, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string {
         let classType = 'class';
         if (isDataClass) {
             classType = 'data class';
@@ -49,18 +53,18 @@ class KotlinLanguageDefinition implements LanguageDefinition {
         return `${classType} ${className}${constructor}${inherits} {\n\n${body}\n}`;
     }
 
-    methodDeclaration(methodName, parameters, returnType, body): string {
+    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string): string {
         let returnString = '';
-        if (returnType && returnType.print() && returnType.print().length > 0) {
-            returnString = ` : ${returnType.print()}`;
+        if (returnType && returnType.print(this) && returnType.print(this).length > 0) {
+            returnString = ` : ${returnType.print(this)}`;
         }
 
-        return `fun ${methodName}(${this.printParametersNamesWithTypes(parameters)})${returnString} {
+        return `fun ${methodName}(${this.printParametersNamesWithTypes(parameters, false)})${returnString} {
 ${body}
 \t}`;
     }
 
-    printParametersNamesWithTypes(parameters, shouldBreakLine = false): string {
+    printParametersNamesWithTypes(parameters: Array<ParameterDefinition>, shouldBreakLine: boolean): string {
         let separator = ', ';
         if (shouldBreakLine) {
             separator = ',\n\t\t';
@@ -74,7 +78,7 @@ ${body}
         }).join(separator);
     }
 
-    parameterDeclaration(parameter): string {
+    parameterDeclaration(parameter: ParameterDefinition): string {
         let declareString = parameter.modifiers ? parameter.modifiers.join(' ') : '';
         if (declareString.length > 1) {
             declareString = `${declareString} `;
@@ -82,7 +86,7 @@ ${body}
         return `${declareString}${parameter.name} : ${parameter.type.print(this)}`;
     }
 
-    printValues(values, shouldBreakLine): string {
+    printValues(values: Array<string>, shouldBreakLine: boolean): string {
         if (!values || values.length === 0) {
             return '';
         }
@@ -99,12 +103,12 @@ ${body}
         }).join(separator);
     }
 
-    fieldDeclaration(visibility, name, type, defaultValue): string {
+    fieldDeclaration(visibility: string, name: string, type: TypeDefinition, defaultValue: string): string {
         let visibilityString = '';
         if (visibility.length > 0) {
             visibilityString = `${visibility} `;
         }
-        let field = `${visibilityString}val ${name} : ${type.print()}`;
+        let field = `${visibilityString}val ${name} : ${type.print(this)}`;
         if (defaultValue) {
             field += ` = ${defaultValue}`;
         }
@@ -112,7 +116,7 @@ ${body}
         return field;
     }
 
-    methodCall(caller, methodName, parameterValues): string {
+    methodCall(caller: string, methodName: string, parameterValues: Array<string>): string {
         let callerString = '';
         if (caller) {
             callerString = `${caller}.`;
@@ -124,33 +128,36 @@ ${body}
         return `${callerString}${methodName}(${this.printValues(parameterValues, shouldBreakLine)})`;
     }
 
-    variableDeclaration(declareType, type, name, defaultValue): string {
-        let variable = `${declareType} ${name} : ${type.print()}`;
+    variableDeclaration(declareType: string, type: TypeDefinition, name: string, defaultValue: string): string {
+        let variable = `${declareType} ${name} : ${type.print(this)}`;
         if (defaultValue) {
             variable += ` = ${defaultValue}`;
         }
         return variable +=';';
     }
 
-    returnDeclaration(value): string {
+    returnDeclaration(value: string): string {
         return `return ${value};`;
     }
 
-    constructorProperties(properties): string {
+    constructorProperties(properties: Array<PropertyDefinition>): string {
         let shouldBreakLine = true;
         if (properties.length < 2) {
             shouldBreakLine = false;
         }
-        return `(${this.printParametersNamesWithTypes(properties, shouldBreakLine)})`;
+        const parameters = properties.map((property) => {
+            return ParameterDefinition.fromProperty(property);
+        });
+        return `(${this.printParametersNamesWithTypes(parameters, shouldBreakLine)})`;
     }
 
-    constructorDeclaration(className, parameters, _returnType, body, _isDataClass): string {
-        return `${className}${this.constructorProperties(parameters)} {
+    constructorDeclaration(className: string, properties: Array<PropertyDefinition>, _returnType: TypeDefinition, body: string, _isDataClass: boolean): string {
+        return `${className}${this.constructorProperties(properties)} {
     ${body}
 \t}`;
     }
 
-    enumDeclaration(enumName, values): string {
+    enumDeclaration(enumName: string, values: Array<string>): string {
         return `\tenum class ${enumName} {
 ${values.map((value) => {
     return `\t\t${value}`;
@@ -158,41 +165,41 @@ ${values.map((value) => {
 \t}`;
     }
 
-    ifStatement(condition, body): string {
+    ifStatement(condition: string, body: string): string {
         return `if (${condition}) {
     ${body}
 \t\t}`;
     }
 
-    whileStatement(condition, body): string {
+    whileStatement(condition: string, body: string): string {
         return `while (${condition}) {
     ${body}
 \t\t}`;
     }
 
-    lambdaMethod(caller, method, varName, body): string {
+    lambdaMethod(caller: string, method: string, varName: string, body: string): string {
         return `${caller}.${method} { (${varName}) ->
     ${body}
 \t\t}`;
     }
 
-    assignment(name1, name2): string {
-        return `${name1} = ${name2};`;
-    }
-
-    constructObject(type, parameters): string {
-        return this.methodCall(null, type, parameters);
-    }
-
-    ifNullStatement(object, body): string {
+    ifNullStatement(object: string, body: string): string {
         return this.ifStatement(`${object} == ${this.nullKeyword}`, body);
     }
 
-    stringDeclaration(content): string {
+    assignment(name1: string, name2: string): string {
+        return `${name1} = ${name2};`;
+    }
+
+    constructObject(type: TypeDefinition, parameters: Array<string> = []): string {
+        return this.methodCall(null, type.name, parameters);
+    }
+
+    stringDeclaration(content: string): string {
         return `"${content}"`;
     }
 
-    tryCatchStatement(tryBody, catchBody, finallyBody): string {
+    tryCatchStatement(tryBody: string, catchBody: string, finallyBody: string): string {
         return `\t\ttry {
     ${tryBody}
 \t\t} catch (e: Exception) {
@@ -202,7 +209,7 @@ ${values.map((value) => {
 \t\t}`
     }
 
-    compareTypeOfObjectsMethod(var1, var2, negative): string {
+    compareTypeOfObjectsMethod(var1: string, var2: string, negative: boolean): string {
         let equal = '==';
         if (negative) {
             equal = '!=';
@@ -210,7 +217,7 @@ ${values.map((value) => {
         return `${var1}::class ${equal} ${var2}::class`;
     }
 
-    equalMethod(var1, var2, negative): string {
+    equalMethod(var1: string, var2: string, negative: boolean): string {
         const equals = `${var1}.${this.equalMethodName}(${var2})`;
         if (negative) {
             return `!${equals}`;
@@ -219,7 +226,7 @@ ${values.map((value) => {
         }
     }
 
-    simpleComparison(var1, var2, negative): string {
+    simpleComparison(var1: string, var2: string, negative: boolean): string {
         let equal = '==';
         if (negative) {
             equal = '!=';

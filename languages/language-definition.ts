@@ -1,3 +1,8 @@
+import TypeDefinition from "../parser/definitions/type-definition";
+import ParameterDefinition from "../parser/definitions/parameter-definition";
+import ConstructorDefinition from "../parser/definitions/constructor-definition";
+import PropertyDefinition from "../parser/definitions/property-definition";
+
 interface LanguageDefinition {
     fileExtension: string;
     useDataclassForModels: boolean;
@@ -45,7 +50,7 @@ interface LanguageDefinition {
 
     returnDeclaration(value: string): string;
 
-    constructorDeclaration(className: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, isDataClass: boolean): string;
+    constructorDeclaration(className: string, properties: Array<PropertyDefinition>, returnType: TypeDefinition, body: string, isDataClass: boolean): string;
 
     enumDeclaration(enumName: string, values: Array<string>): string;
 

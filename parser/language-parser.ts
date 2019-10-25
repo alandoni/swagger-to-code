@@ -7,7 +7,7 @@ import ModelClassParser from './model-class-parser';
 import DatabaseTableSchemaClassParser from './database-table-schema-class-parser';
 
 import SqliteLanguageDefinition from '../languages/sqlite-language-definition';
-import { YamlDefinition, YamlType, YamlProperty } from './swagger-objects/definition';
+import { YamlDefinition, YamlType, YamlProperty } from './swagger-objects-representation/definition';
 import JavascriptLanguageDefinition from '../languages/javascript-language-definition';
 
 class LanguageDefinitionFactory {
@@ -31,8 +31,6 @@ class LanguageParser {
 
     parse(object: any, language: string) {
         const languageDefinition = LanguageDefinitionFactory.makeLanguageDefinition(language);
-        const modelParser = new ModelClassParser();
-        const tableSchemaParser = new DatabaseTableSchemaClassParser();
         const sqliteLanguageDefinition = new SqliteLanguageDefinition();
 
         const yamlDefinitions = this.convertYamlDefinitions(Object.entries(object.definitions));
@@ -46,12 +44,14 @@ class LanguageParser {
 
         const classes = [];
         this.definitions.forEach((definition) => {
-            let classDefinition = modelParser.parse(languageDefinition, definition);
+            const modelParser = new ModelClassParser(languageDefinition, definition);
+            let classDefinition = modelParser.parse();
             classes.push({fileName: `${classDefinition.name}.${languageDefinition.fileExtension}`,
                 definition: classDefinition, 
                 content: classDefinition.print(languageDefinition)});
             if (definition.needsTable) {
-                classDefinition = tableSchemaParser.parse(languageDefinition, sqliteLanguageDefinition, definition[1]);
+                const tableSchemaParser = new DatabaseTableSchemaClassParser(languageDefinition, sqliteLanguageDefinition, definition);
+                classDefinition = tableSchemaParser.parse();
                 classes.push({fileName: `${classDefinition.name}.${languageDefinition.fileExtension}`,
                     definition: classDefinition, 
                     content: classDefinition.print(languageDefinition)});
@@ -109,9 +109,9 @@ class LanguageParser {
                 });
 
                 if (propertyReferringToDefinition) {
-                    refersTo.addReference(new DefinitionReferenceHelper(definition, property, DefinitionReferenceHelper.N_TO_ONE));
+                    refersTo.addReference(new DefinitionReferenceHelper(definition, property, RelationshipType.N_TO_ONE));
                 } else {
-                    refersTo.addReference(new DefinitionReferenceHelper(definition, property, DefinitionReferenceHelper.ONE_TO_N));
+                    refersTo.addReference(new DefinitionReferenceHelper(definition, property, RelationshipType.ONE_TO_N));
                 } 
             });
 
@@ -122,7 +122,7 @@ class LanguageParser {
                 const refersTo = this.preparedDefinitions[property.type];
                 property.type = refersTo;
                 property.setReference(refersTo);
-                definition.addReference(new DefinitionReferenceHelper(refersTo, property, DefinitionReferenceHelper.ONE_TO_ONE));
+                definition.addReference(new DefinitionReferenceHelper(refersTo, property, RelationshipType.ONE_TO_ONE));
             });
         });
     }
@@ -177,7 +177,7 @@ class DefinitionHelper {
     needsTable: boolean;
     properties: Array<DefinitionPropertiesHelper>;
     requiredProperties: Array<string>;
-    references: Array<DefinitionHelper>;
+    references: Array<DefinitionReferenceHelper>;
     useFieldsAsPartOfTheSameTable: boolean;
 
     constructor(name: string, properties: Array<YamlProperty>, requiredProperties: Array<string>) {
@@ -199,7 +199,7 @@ class DefinitionHelper {
         this.references = [];
     }
 
-    addReference(otherDefinition) {
+    addReference(otherDefinition: DefinitionReferenceHelper) {
         this.references.push(otherDefinition);
     }
 }
@@ -255,20 +255,29 @@ class DefinitionPropertiesHelper {
     }
 }
 
-class DefinitionReferenceHelper {
-    static ONE_TO_ONE = "ONE_TO_ONE";
-    static ONE_TO_N = "ONE_TO_N";
-    static N_TO_ONE = "N_TO_ONE";
+enum RelationshipType {
+    ONE_TO_ONE,
+    ONE_TO_N,
+    N_TO_ONE,
+}
 
+class DefinitionReferenceHelper {
     definition: DefinitionHelper;
     property: DefinitionPropertiesHelper;
-    isArray: boolean;
+    relationship: RelationshipType;
 
-    constructor(definition, property, isArray) {
+    constructor(definition: DefinitionHelper, property: DefinitionPropertiesHelper, relationship: RelationshipType) {
         this.definition = definition;
         this.property = property;
-        this.isArray = isArray;
+        this.relationship = relationship;
     }
 }
 
 export default LanguageParser;
+
+export {
+    DefinitionHelper,
+    DefinitionPropertiesHelper,
+    DefinitionReferenceHelper,
+    RelationshipType
+}

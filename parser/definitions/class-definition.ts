@@ -1,5 +1,23 @@
-class ClassDefinition {
-    constructor(name, properties, constructors, methods, enums = [], dependencies = [], isDataClass = false) {
+import PropertyDefinition from "./property-definition";
+import ConstructorDefinition from "./constructor-definition";
+import MethodDefinition from "./method-definition";
+import EnumDefinition from "./enum-definition";
+import LanguageDefinition from "../../languages/language-definition";
+import PrintableLanguageElements from "./printable-language-elements";
+import { DefinitionHelper } from "../language-parser";
+
+class ClassDefinition implements PrintableLanguageElements {
+    name: string;
+    properties: Array<PropertyDefinition>;
+    constructors: Array<ConstructorDefinition>;
+    methods: Array<MethodDefinition>;
+    enums: Array<EnumDefinition>;
+    dependencies: Array<DefinitionHelper>;
+    isDataClass: boolean;
+
+    constructor(name: string, properties: Array<PropertyDefinition>, constructors: Array<ConstructorDefinition>, 
+            methods: Array<MethodDefinition>, enums: Array<EnumDefinition> = [], 
+            dependencies: Array<DefinitionHelper> = [], isDataClass: boolean = false) {
         this.name = name;
         this.properties = properties;
         this.constructors = constructors;
@@ -9,7 +27,7 @@ class ClassDefinition {
         this.isDataClass = isDataClass;
     }
 
-    print(languageDefinition) {
+    print(languageDefinition: LanguageDefinition) {
         const imports = languageDefinition.importDeclarations(this.dependencies.map((dependency) => {
             return dependency.name;
         }));
@@ -22,10 +40,6 @@ class ClassDefinition {
             }).join('\n\n');
         }
 
-        const methods = this.methods.map((method) => {
-            return `\t${method.print(languageDefinition)}`;
-        }).join('\n\n');
-
         let enums = '';
         if (this.enums) {
             enums = this.enums.map((enumDeclaration) => {
@@ -33,23 +47,29 @@ class ClassDefinition {
             }).join('\n\n');
         }
 
-        let properties = '';        
+        let properties = '';
+        let methods = this.methods;
         if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
             if (languageDefinition.needDeclareFields || !this.isDataClass) {
                 properties = this.properties.map((property) => {
                     return `\t${property.print(languageDefinition)}`;
                 }).join('\n\n');
             }
-            this.methods.splice(0, 0, constructors);
+
+            methods = [...this.constructors, ...this.methods];
         }
 
-        const classBody = [properties, constructors, methods, enums].filter((string) => {
+        const methodsString = methods.map((method) => {
+            return `\t${method.print(languageDefinition)}`;
+        }).join('\n\n');
+
+        const classBody = [properties, constructors, methodsString, enums].filter((string) => {
             return string.length > 0;
         }).join('\n\n');
 
         let modelClassString;
         if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
-            modelClassString = languageDefinition.classDeclaration(this.name, null, classBody);
+            modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, false, null);
         } else{
             modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, true, this.constructors);
         }
@@ -57,4 +77,4 @@ class ClassDefinition {
     }
 }
 
-module.exports = ClassDefinition;
+export default ClassDefinition;

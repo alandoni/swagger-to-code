@@ -1,0 +1,75 @@
+interface LanguageDefinition {
+    fileExtension: string;
+    useDataclassForModels: boolean;
+    needDeclareFields: boolean;
+    isTypesafeLanguage: boolean;
+    thisKeyword: string;
+    constKeyword: string;
+    variableKeyword: string;
+    nullKeyword: string;
+    anyTypeKeyword: string;
+    intKeyword: string;
+    numberKeyword: string;
+    stringKeyword: string;
+    booleanKeyword: string;
+    falseKeyword: string;
+    trueKeyword: string;
+    arrayKeyword: string;
+    arrayListKeyword: string;
+    shouldConstructList: boolean;
+    mapKeyword: string;
+    publicKeyword: string;
+    privateKeyword: string;
+    stringReplacement: string;
+    equalMethodName: string;
+    varargsKeyword: string;
+    constructorAlsoDeclareFields: boolean;
+
+    importDeclarations(imports: Array<string>): string;
+
+    classDeclaration(className: string, inheritsFrom: string, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string;
+
+    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string): string;
+
+    printParametersNamesWithTypes(parameters: Array<ParameterDefinition>, shouldBreakLine: boolean): string;
+
+    parameterDeclaration(parameter: ParameterDefinition): string;
+
+    printValues(values: Array<string>, shouldBreakLine: boolean): string;
+
+    fieldDeclaration(visibility: string, name: string, type: TypeDefinition, defaultValue: string): string;
+
+    methodCall(caller: string, methodName: string, parameterValues: Array<string>): string;
+
+    variableDeclaration(declareType: string, type: TypeDefinition, name: string, defaultValue: string): string;
+
+    returnDeclaration(value: string): string;
+
+    constructorDeclaration(className: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, isDataClass: boolean): string;
+
+    enumDeclaration(enumName: string, values: Array<string>): string;
+
+    ifStatement(condition: string, body: string): string;
+
+    whileStatement(condition: string, body: string): string;
+
+    lambdaMethod(caller: string, method: string, varName: string, body: string): string;
+
+    ifNullStatement(object: string, body: string): string;
+
+    assignment(name1: string, name2: string): string;
+
+    constructObject(type: TypeDefinition, parameters: Array<string>): string;
+
+    stringDeclaration(content: string): string;
+
+    tryCatchStatement(tryBody: string, catchBody: string, finallyBody: string): string;
+
+    compareTypeOfObjectsMethod(var1: string, var2: string, negative: boolean): string;
+
+    equalMethod(var1: string, var2: string, negative: boolean): string;
+
+    simpleComparison(var1: string, var2: string, negative: boolean): string;
+}
+
+export default LanguageDefinition;

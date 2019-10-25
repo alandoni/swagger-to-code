@@ -1,18 +1,39 @@
-const LanguageDefinition = require('./language-definition');
+import LanguageDefinition from './language-definition';
 
+class KotlinLanguageDefinition implements LanguageDefinition {
+    fileExtension = 'kt';
+    useDataclassForModels = true;
+    isTypesafeLanguage = true;
+    thisKeyword = 'this';
+    constKeyword = 'val';
+    variableKeyword = 'var';
+    nullKeyword = 'null';
+    anyTypeKeyword = 'Any';
+    intKeyword = 'Int';
+    numberKeyword = 'Double';
+    stringKeyword = 'String';
+    booleanKeyword = 'Boolean';
+    falseKeyword = 'false';
+    trueKeyword = 'true';
+    arrayKeyword = 'Array';
+    arrayListKeyword = 'ArrayList';
+    shouldConstructList = true;
+    mapKeyword = 'Map';
+    publicKeyword = 'public';
+    privateKeyword = 'private';
+    stringReplacement = '%s';
+    equalMethodName = 'equals';
+    varargsKeyword = 'varargs';
+    constructorAlsoDeclareFields = true;
+    needDeclareFields = false;
 
-class KotlinLanguageDefinition extends LanguageDefinition {
-    get fileExtension() {
-        return 'kt';
-    }
-
-    importDeclarations(imports) {
+    importDeclarations(imports): string {
         return imports.map((importFile) => {
             return `import ${importFile};`;
         }).join('\n');
     }
 
-    classDeclaration(className, inheritsFrom, body, isDataClass, constructors) {
+    classDeclaration(className, inheritsFrom, body, isDataClass, constructors): string {
         let classType = 'class';
         if (isDataClass) {
             classType = 'data class';
@@ -28,7 +49,7 @@ class KotlinLanguageDefinition extends LanguageDefinition {
         return `${classType} ${className}${constructor}${inherits} {\n\n${body}\n}`;
     }
 
-    methodDeclaration(methodName, parameters, returnType, body) {
+    methodDeclaration(methodName, parameters, returnType, body): string {
         let returnString = '';
         if (returnType && returnType.print() && returnType.print().length > 0) {
             returnString = ` : ${returnType.print()}`;
@@ -39,7 +60,7 @@ ${body}
 \t}`;
     }
 
-    printParametersNamesWithTypes(parameters, shouldBreakLine = false) {
+    printParametersNamesWithTypes(parameters, shouldBreakLine = false): string {
         let separator = ', ';
         if (shouldBreakLine) {
             separator = ',\n\t\t';
@@ -53,7 +74,7 @@ ${body}
         }).join(separator);
     }
 
-    parameterDeclaration(parameter) {
+    parameterDeclaration(parameter): string {
         let declareString = parameter.modifiers ? parameter.modifiers.join(' ') : '';
         if (declareString.length > 1) {
             declareString = `${declareString} `;
@@ -61,7 +82,7 @@ ${body}
         return `${declareString}${parameter.name} : ${parameter.type.print(this)}`;
     }
 
-    printValues(values, shouldBreakLine) {
+    printValues(values, shouldBreakLine): string {
         if (!values || values.length === 0) {
             return '';
         }
@@ -78,7 +99,7 @@ ${body}
         }).join(separator);
     }
 
-    fieldDeclaration(visibility, name, type, defaultValue) {
+    fieldDeclaration(visibility, name, type, defaultValue): string {
         let visibilityString = '';
         if (visibility.length > 0) {
             visibilityString = `${visibility} `;
@@ -91,7 +112,7 @@ ${body}
         return field;
     }
 
-    methodCall(caller, methodName, parameterValues) {
+    methodCall(caller, methodName, parameterValues): string {
         let callerString = '';
         if (caller) {
             callerString = `${caller}.`;
@@ -103,7 +124,7 @@ ${body}
         return `${callerString}${methodName}(${this.printValues(parameterValues, shouldBreakLine)})`;
     }
 
-    variableDeclaration(declareType, type, name, defaultValue) {
+    variableDeclaration(declareType, type, name, defaultValue): string {
         let variable = `${declareType} ${name} : ${type.print()}`;
         if (defaultValue) {
             variable += ` = ${defaultValue}`;
@@ -111,11 +132,11 @@ ${body}
         return variable +=';';
     }
 
-    returnDeclaration(value) {
+    returnDeclaration(value): string {
         return `return ${value};`;
     }
 
-    constructorProperties(properties) {
+    constructorProperties(properties): string {
         let shouldBreakLine = true;
         if (properties.length < 2) {
             shouldBreakLine = false;
@@ -123,17 +144,13 @@ ${body}
         return `(${this.printParametersNamesWithTypes(properties, shouldBreakLine)})`;
     }
 
-    constructorDeclaration(className, parameters, returnType, body, isDataClass) {
+    constructorDeclaration(className, parameters, _returnType, body, _isDataClass): string {
         return `${className}${this.constructorProperties(parameters)} {
     ${body}
 \t}`;
     }
 
-    get constructorAlsoDeclareFields() {
-        return true;
-    }
-
-    enumDeclaration(enumName, values) {
+    enumDeclaration(enumName, values): string {
         return `\tenum class ${enumName} {
 ${values.map((value) => {
     return `\t\t${value}`;
@@ -141,41 +158,41 @@ ${values.map((value) => {
 \t}`;
     }
 
-    ifStatement(condition, body) {
+    ifStatement(condition, body): string {
         return `if (${condition}) {
     ${body}
 \t\t}`;
     }
 
-    whileStatement(condition, body) {
+    whileStatement(condition, body): string {
         return `while (${condition}) {
     ${body}
 \t\t}`;
     }
 
-    lambdaMethod(caller, method, varName, body) {
+    lambdaMethod(caller, method, varName, body): string {
         return `${caller}.${method} { (${varName}) ->
     ${body}
 \t\t}`;
     }
 
-    assignment(name1, name2) {
+    assignment(name1, name2): string {
         return `${name1} = ${name2};`;
     }
 
-    constructObject(type, parameters) {
+    constructObject(type, parameters): string {
         return this.methodCall(null, type, parameters);
     }
 
-    ifNullStatement(object, body) {
+    ifNullStatement(object, body): string {
         return this.ifStatement(`${object} == ${this.nullKeyword}`, body);
     }
 
-    stringDeclaration(content) {
+    stringDeclaration(content): string {
         return `"${content}"`;
     }
 
-    tryCatchStatement(tryBody, catchBody, finallyBody) {
+    tryCatchStatement(tryBody, catchBody, finallyBody): string {
         return `\t\ttry {
     ${tryBody}
 \t\t} catch (e: Exception) {
@@ -185,68 +202,7 @@ ${values.map((value) => {
 \t\t}`
     }
 
-    get useDataclassForModels() {
-        return true;
-    }
-    get isTypesafeLanguage() {
-        return true;
-    }
-    get thisKeyword() {
-        return 'this';
-    }
-    get constKeyword() {
-        return 'val';
-    }
-    get variableKeyword() {
-        return 'var';
-    }
-    get nullKeyword() {
-        return 'null';
-    }
-    get anyTypeKeyword() {
-        return 'Any';
-    }
-    get intKeyword() {
-        return 'Int';
-    }
-    get numberKeyword() {
-        return 'Double';
-    }
-    get stringKeyword() {
-        return 'String';
-    }
-    get booleanKeyword() {
-        return 'Boolean';
-    }
-    get falseKeyword() {
-        return 'false';
-    }
-    get trueKeyword() {
-        return 'true';
-    }
-    get arrayKeyword() {
-        return 'Array';
-    }
-    get arrayListKeyword() {
-        return 'ArrayList';
-    }
-    get shouldConstructList() {
-        return true;
-    }
-    get mapKeyword() {
-        return 'Map';
-    }
-    get publicKeyword() {
-        return 'public';
-    }
-    get privateKeyword() {
-        return 'private';
-    }
-    get stringReplacement() {
-        return '%s';
-    }
-
-    compareTypeOfObjectsMethod(var1, var2, negative) {
+    compareTypeOfObjectsMethod(var1, var2, negative): string {
         let equal = '==';
         if (negative) {
             equal = '!=';
@@ -254,7 +210,7 @@ ${values.map((value) => {
         return `${var1}::class ${equal} ${var2}::class`;
     }
 
-    equalMethod(var1, var2, negative) {
+    equalMethod(var1, var2, negative): string {
         const equals = `${var1}.${this.equalMethodName}(${var2})`;
         if (negative) {
             return `!${equals}`;
@@ -263,21 +219,13 @@ ${values.map((value) => {
         }
     }
 
-    get equalMethodName() {
-        return 'equals';
-    }
-
-    simpleComparison(var1, var2, negative) {
+    simpleComparison(var1, var2, negative): string {
         let equal = '==';
         if (negative) {
             equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
     }
-
-    get varargsKeyword() {
-        return 'varargs';
-    }
 }
 
-module.exports = KotlinLanguageDefinition;
+export default KotlinLanguageDefinition;

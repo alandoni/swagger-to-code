@@ -2,7 +2,7 @@ const YAML = require('yaml');
 const fs = require('fs');
 
 const acceptedLanguages = require('./languages/languages');
-const Parser = require('./parser/language-parser');
+const LanguageParser = require('./parser/language-parser');
 
 function validateLanguage(language) {
     return acceptedLanguages.indexOf(language) > -1;
@@ -27,7 +27,13 @@ function validateYamlSwaggerFile(yamlObject) {
 }
 
 function processFileWithLanguage(yamlObject, language) {
-    new Parser().parse(yamlObject, language);
+    new LanguageParser().parse(yamlObject, language).map((clasz) => {
+        const dir = './result';
+        if (!fs.existsSync(dir)){
+            fs.mkdirSync(dir);
+        }
+        fs.writeFileSync(`${dir}/${clasz.fileName}`, clasz.content);
+    });
 }
 
 function execute(language, file1, file2) {

@@ -2,6 +2,10 @@ const LanguageDefinition = require('./language-definition');
 
 
 class KotlinLanguageDefinition extends LanguageDefinition {
+    get fileExtension() {
+        return 'kt';
+    }
+
     importDeclarations(imports) {
         return imports.map((importFile) => {
             return `import ${importFile};`;
@@ -131,9 +135,9 @@ ${body}
 
     enumDeclaration(enumName, values) {
         return `\tenum class ${enumName} {
-    ${values.map((value) => {
-        return `\t\t${value}`;
-    }).join(',\n')}
+${values.map((value) => {
+    return `\t\t${value}`;
+}).join(',\n')}
 \t}`;
     }
 

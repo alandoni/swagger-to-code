@@ -82,4 +82,8 @@ module.exports = class SqliteLanguageDefinition {
   get parameterKeyword() {
     return '?';
   }
+
+  get inKeyword() {
+    return 'IN';
+  }
 }

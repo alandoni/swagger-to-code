@@ -1,6 +1,10 @@
 const StringUtils = require('../string-utils');
 
 class LanguageDefinition {
+    get fileExtension() {
+        return 'js';
+    }
+
     importDeclarations(imports) {
         return imports.map((importFile) => {
             return `const ${importFile} = require(${this.stringDeclaration(`./${importFile}`)});`;

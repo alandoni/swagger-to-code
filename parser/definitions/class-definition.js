@@ -11,7 +11,7 @@ class ClassDefinition {
 
     print(languageDefinition) {
         const imports = languageDefinition.importDeclarations(this.dependencies.map((dependency) => {
-            return dependency.print();
+            return dependency.name;
         }));
 
         let constructors = '';

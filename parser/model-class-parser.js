@@ -11,7 +11,7 @@ module.exports = class ModelClassParser {
         const className = definition.name;
         const properties = ModelClassParser.parseProperties(languageDefinition, definition.properties, definition.requiredProperties);
         
-        const dependencies = ModelClassParser.parseDependencies(properties);
+        const dependencies = ModelClassParser.parseDependencies(definition);
 
         const enums = this.parseEnums(definition.properties);
 
@@ -23,21 +23,9 @@ module.exports = class ModelClassParser {
         return new ClassDefinition(className, properties, constructors, methods, enums, dependencies, true);
     }
 
-    static parseDependencies(properties) {
-        return properties.map((property) => {
-            if (property.type.subtype) {
-                if (!property.type.subtype.isNative) {
-                    return property.type.subtype;
-                }
-                return null;
-            } else {
-                if (!property.type.isNative) {
-                    return property.type;
-                }
-                return null;
-            }
-        }).filter((property) => {
-            return property != null;
+    static parseDependencies(definition) {
+        return definition.references.map((reference) => {
+            return reference.definition;
         });
     }
 
@@ -136,9 +124,9 @@ module.exports = class ModelClassParser {
             return new TypeDefinition(languageDefinition.arrayKeyword, true, this.getPropertyType(languageDefinition, property.items), isEnum);
         }
         if (property.type === 'object') {
-            return new TypeDefinition(languageDefinition.mapKeyword, true, null, isEnum);
+            return new TypeDefinition(languageDefinition.mapKeyword, false, null, isEnum);
         }
 
-        return new TypeDefinition(property.type.name, false, null, isEnum);
+        return new TypeDefinition(property.type.name || property.type, false, null, isEnum);
     }
 }

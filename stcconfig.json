@@ -1,30 +1,32 @@
 {
   "languages": {
     "KOTLIN": {
-      "modelClassesImplementsInterfaces": [
-        "Copyable"
-      ],
-      "databaseClassesImplementsInterfaces": [],
-      "language": "KOTLIN",
-      "srcDirectory": {
-        "KOTLIN": [
-          "src",
-          "androidMain",
-          "kotlin"
-        ],
-        "JAVASCRIPT": [],
-        "SWIFT": [],
-        "TYPESCRIPT": []
+      "classesSettings": {
+        "MODEL_CLASSES": {
+          "implementsInterfaces": [
+            "Copyable"
+          ],
+          "language": "KOTLIN",
+          "rootProjectDirectory": "/Users/alanquintiliano/Development/android/test",
+          "srcDirectory": "src/androidMain/kotlin",
+          "module": "domain",
+          "package": "com.adqmobile.test.domain.models",
+          "inheritsFrom": "Entity"
+        },
+        "DATABASE_CLASSES": {
+          "implementsInterfaces": [],
+          "language": "KOTLIN",
+          "rootProjectDirectory": "/Users/alanquintiliano/Development/android/test",
+          "srcDirectory": "src/androidMain/kotlin",
+          "module": "data",
+          "package": "com.adqmobile.test.data.database",
+          "inheritsFrom": "DAO"
+        }
       },
+      "language": "KOTLIN",
       "mainPackage": "com.adqmobile.test",
-      "rootProjectDirectory": "D:\\Development\\Android\\Test",
-      "modelClassesModule": "domain",
-      "modelClassesPackage": "com.adqmobile.test.domain.models",
-      "modelClassesInheritsFrom": "Entity",
-      "databaseClassesModule": "data",
-      "databaseClassesPackage": "com.adqmobile.test.data.database",
-      "databaseClassesInheritsFrom": "DAO"
+      "rootProjectDirectory": "/Users/alanquintiliano/Development/android/test"
     }
   },
-  "swaggerFile": "C:\\Users\\Alan\\Documents\\swagger.yaml"
+  "swaggerFile": "/Users/alanquintiliano/Documents/swagger.yaml"
 }

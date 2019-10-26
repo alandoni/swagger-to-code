@@ -1,5 +1,6 @@
 import fs from 'fs';
 import YAML from 'yaml';
+import path from 'path';
 
 import Languages from './languages/languages';
 import LanguageParser from './parser/language-parser';
@@ -26,13 +27,13 @@ class Program {
     }
     
     processFileWithLanguage(yamlObject: any, configuration: Configuration) {
-        Object.entries(configuration.languages).map((language: any) => {
-            new LanguageParser().parse(yamlObject, language.language).map((clasz) => {
-                const dir = './result';
+        Object.entries(configuration.languages).map((languageSettings: any) => {
+            new LanguageParser().parse(yamlObject, languageSettings[1].language, configuration).map((classFile) => {
+                const dir = classFile.directory;
                 if (!fs.existsSync(dir)){
-                    fs.mkdirSync(dir);
+                    fs.mkdirSync(dir, { recursive: true });
                 }
-                fs.writeFileSync(`${dir}/${clasz.fileName}`, clasz.content);
+                fs.writeFileSync(`${dir}${path.sep}${classFile.file}`, classFile.content);
             });
         });
     }
@@ -62,12 +63,12 @@ class Program {
         let configuration: Configuration = null;
         try {
             const configurationString = fs.readFileSync(ConfigurationFileBuilder.CONFIGURATION_FILE_PATH, 'utf8');
-            configuration = JSON.parse(configurationString);
+            configuration = Object.assign(Object.create(Configuration.prototype), JSON.parse(configurationString));
         } catch (e) {
             configuration = await new ConfigurationFileBuilder().createSettingsFile();
         }
         
-        if (configuration) {
+        if (configuration.getLanguageSettings) {
             this.runWithConfiguration(configuration);
         }
     }

@@ -3,8 +3,10 @@ import ParameterDefinition from '../parser/definitions/parameter-definition';
 import TypeDefinition from '../parser/definitions/type-definition';
 import ConstructorDefinition from '../parser/definitions/constructor-definition';
 import PropertyDefinition from '../parser/definitions/property-definition';
+import Languages from './languages';
 
 class KotlinLanguageDefinition implements LanguageDefinition {
+    name = Languages.KOTLIN;
     fileExtension = 'kt';
     useDataclassForModels = true;
     isTypesafeLanguage = true;
@@ -31,20 +33,30 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     constructorAlsoDeclareFields = true;
     needDeclareFields = false;
 
+    printPackage(packageString: string) {
+        return `package ${packageString};`;
+    }
+
     importDeclarations(imports: Array<string>): string {
         return imports.map((importFile) => {
             return `import ${importFile};`;
         }).join('\n');
     }
 
-    classDeclaration(className: string, inheritsFrom: string, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string {
+    classDeclaration(className: string, inheritsFrom: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string {
         let classType = 'class';
         if (isDataClass) {
             classType = 'data class';
         }
         let inherits = '';
         if (inheritsFrom) {
-            inherits = ` : ${inheritsFrom}`;
+            inherits = ` : ${inheritsFrom.name}`;
+        }
+        if (implementsInterfaces.length > 0) {
+            const interfacesString = implementsInterfaces.map((interfaceType) => {
+                return interfaceType.name;
+            }).join(', ');
+            inherits += `, ${interfacesString}`;
         }
         let constructor = '';
         if (constructors && constructors.length > 0) {

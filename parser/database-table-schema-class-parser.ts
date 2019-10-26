@@ -8,8 +8,10 @@ import PropertyDefinition from "./definitions/property-definition";
 import StringUtils from "../string-utils";
 import ClassDefinition from "./definitions/class-definition";
 import MethodDefinition from "./definitions/method-definition";
+import Parser from "./parser-interface";
+import { LanguageSettings, TypeOfClass } from "../configuration";
 
-export default class DatabaseTableSchemaClassParser {
+export default class DatabaseTableSchemaClassParser implements Parser {
     static STRING_TO_ARRAY_SEPARATOR = ';';
     static classSufix = 'TableSchema';
     static tableNameProperty = 'TABLE_NAME';
@@ -18,31 +20,44 @@ export default class DatabaseTableSchemaClassParser {
     languageDefinition: LanguageDefinition;
     databaseLanguageDefinition: SqliteLanguageDefinition;
     definition: DefinitionHelper;
+    configuration: LanguageSettings;
 
-    constructor(languageDefinition: LanguageDefinition, databaseLanguageDefinition: SqliteLanguageDefinition, definition: DefinitionHelper) {
+    constructor(languageDefinition: LanguageDefinition, databaseLanguageDefinition: SqliteLanguageDefinition, definition: DefinitionHelper, configuration: LanguageSettings) {
         this.languageDefinition = languageDefinition;
         this.databaseLanguageDefinition = databaseLanguageDefinition;
         this.definition = definition;
+        this.configuration = configuration;
     }
 
-    parse() {
+    parse(): ClassDefinition {
         const nativeDependencies = [
-            new DefinitionHelper('android.database.sqlite.SQLiteDatabase', null, null),
-            new DefinitionHelper('android.database.Cursor', null, null),
+            'android.database.sqlite.SQLiteDatabase',
+            'android.database.Cursor',
         ];
         const className = this.definition.name;
         const tableClassName = `${className}${DatabaseTableSchemaClassParser.classSufix}`;
 
         const fields = this.parseProperties();
         
-        const parseDependencies = ModelClassParser.parseDependencies(this.definition);
+        const parseDependencies = ModelClassParser.parseDependencies(this.definition, this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES));
+
+        const classSettings = this.configuration.getClassSettings(TypeOfClass.DATABASE_CLASSES);
+
+        const inherits = TypeDefinition.typeBySplittingPackageAndName(classSettings.inheritsFrom);
+        const implementsInterfaces = classSettings.implementsInterfaces.map((interfaceString) => {
+            return TypeDefinition.typeBySplittingPackageAndName(interfaceString);
+        });
 
         const dependencies = [
             ...nativeDependencies, 
             ...parseDependencies,
-            ...parseDependencies.map((dependency) => {
-                if (dependency.needsTable) {
-                    return new DefinitionHelper(`${dependency.name}${DatabaseTableSchemaClassParser.classSufix}`, null, null);
+            inherits.package,
+            ...implementsInterfaces.map((interfaceType) => {
+                return interfaceType.package;
+            }),
+            ...this.definition.references.map((dependency) => {
+                if (dependency.definition.needsTable) {
+                    return `${classSettings.package}.${dependency.definition.name}${DatabaseTableSchemaClassParser.classSufix}`;
                 }
                 return null;
             }).filter((dependency) => {
@@ -72,8 +87,11 @@ export default class DatabaseTableSchemaClassParser {
 
         const properties = this.getAllProperties(tableNameString, fields);
 
-        const tableClass = new ClassDefinition(tableClassName, properties, null, methods, null, dependencies);
+        const packageString = classSettings.package;
 
+        const tableClass = new ClassDefinition(packageString, tableClassName, properties, null, methods, null, dependencies);
+        tableClass.inheritsFrom = inherits;
+        tableClass.implements = implementsInterfaces;
         return tableClass;
     }
 

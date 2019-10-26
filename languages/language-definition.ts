@@ -4,6 +4,7 @@ import ConstructorDefinition from "../parser/definitions/constructor-definition"
 import PropertyDefinition from "../parser/definitions/property-definition";
 
 interface LanguageDefinition {
+    name: string;
     fileExtension: string;
     useDataclassForModels: boolean;
     needDeclareFields: boolean;
@@ -30,9 +31,11 @@ interface LanguageDefinition {
     varargsKeyword: string;
     constructorAlsoDeclareFields: boolean;
 
+    printPackage(packageString: string);
+
     importDeclarations(imports: Array<string>): string;
 
-    classDeclaration(className: string, inheritsFrom: string, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string;
+    classDeclaration(className: string, inheritsFrom: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string;
 
     methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string): string;
 

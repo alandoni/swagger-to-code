@@ -7,21 +7,37 @@ import PropertyDefinition from "./definitions/property-definition";
 import TypeDefinition from "./definitions/type-definition";
 import EnumDefinition from "./definitions/enum-definition";
 import MethodDefinition from "./definitions/method-definition";
+import Parser from "./parser-interface";
+import { ClassSettings } from "../configuration";
 
-export default class ModelClassParser {
+export default class ModelClassParser implements Parser {
     languageDefinition: LanguageDefinition;
     definition: DefinitionHelper;
+    configuration: ClassSettings;
     
-    constructor(languageDefinition: LanguageDefinition, definition: DefinitionHelper) {
+    constructor(languageDefinition: LanguageDefinition, definition: DefinitionHelper, configuration: ClassSettings) {
         this.languageDefinition = languageDefinition;
-        this.definition = definition
+        this.definition = definition;
+        this.configuration = configuration;
     }
 
-    parse() {
+    parse(): ClassDefinition {
         const className = this.definition.name;
         const properties = this.parseProperties();
         
-        const dependencies = ModelClassParser.parseDependencies(this.definition);
+        const inherits = TypeDefinition.typeBySplittingPackageAndName(this.configuration.inheritsFrom);
+        const implementsInterfaces = this.configuration.implementsInterfaces.map((interfaceString) => {
+            return TypeDefinition.typeBySplittingPackageAndName(interfaceString);
+        });
+
+        let dependencies = ModelClassParser.parseDependencies(this.definition, this.configuration);
+        dependencies = [
+            inherits.package,
+            ...implementsInterfaces.map((interfaceType) => {
+                return interfaceType.package;
+            }),
+            ...dependencies,
+        ];
 
         const enums = this.parseEnums(properties);
 
@@ -30,12 +46,17 @@ export default class ModelClassParser {
 
         const constructors = [this.parseConstructors(properties)];
 
-        return new ClassDefinition(className, properties, constructors, methods, enums, dependencies, true);
+        const packageString = this.configuration.package;
+
+        const classDefinition = new ClassDefinition(packageString, className, properties, constructors, methods, enums, dependencies, true);
+        classDefinition.inheritsFrom = inherits;
+        classDefinition.implements = implementsInterfaces;
+        return classDefinition;
     }
 
-    static parseDependencies(definition: DefinitionHelper): Array<DefinitionHelper> {
+    static parseDependencies(definition: DefinitionHelper, configuration: ClassSettings): Array<string> {
         return definition.references.map((reference) => {
-            return reference.definition;
+            return `${configuration.package}.${reference.definition.name}`;
         });
     }
 

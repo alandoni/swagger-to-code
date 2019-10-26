@@ -3,8 +3,10 @@ import TypeDefinition from "../parser/definitions/type-definition";
 import ParameterDefinition from "../parser/definitions/parameter-definition";
 import ConstructorDefinition from "../parser/definitions/constructor-definition";
 import PropertyDefinition from "../parser/definitions/property-definition";
+import Languages from "./languages";
 
 class JavascriptLanguageDefinition implements LanguageDefinition {
+    name = Languages.JAVASCRIPT;
     fileExtension = 'js';
     useDataclassForModels = false;
     needDeclareFields = false;
@@ -31,13 +33,17 @@ class JavascriptLanguageDefinition implements LanguageDefinition {
     varargsKeyword = '...';
     constructorAlsoDeclareFields = false;
 
+    printPackage(_package: string) {
+        return ``;
+    }
+
     importDeclarations(imports: Array<string>): string {
         return imports.map((importFile) => {
             return `const ${importFile} = require(${this.stringDeclaration(`./${importFile}`)});`;
         }).join('\n');
     }
 
-    classDeclaration(className: string, inheritsFrom: string, body: string, _isDataClass: boolean, _constructors: Array<ConstructorDefinition>): string {
+    classDeclaration(className: string, inheritsFrom: TypeDefinition, _implementsInterfaces: Array<TypeDefinition>, body: string, _isDataClass: boolean, _constructors: Array<ConstructorDefinition>): string {
         let inherits = '';
         if (inheritsFrom) {
             inherits = ` extends ${inheritsFrom}`;

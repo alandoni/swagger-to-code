@@ -4,20 +4,24 @@ import MethodDefinition from "./method-definition";
 import EnumDefinition from "./enum-definition";
 import LanguageDefinition from "../../languages/language-definition";
 import PrintableLanguageElements from "./printable-language-elements";
-import { DefinitionHelper } from "../language-parser";
+import TypeDefinition from "./type-definition";
 
 class ClassDefinition implements PrintableLanguageElements {
+    package: string;
     name: string;
     properties: Array<PropertyDefinition>;
     constructors: Array<ConstructorDefinition>;
     methods: Array<MethodDefinition>;
     enums: Array<EnumDefinition>;
-    dependencies: Array<DefinitionHelper>;
+    dependencies: Array<string>;
     isDataClass: boolean;
+    inheritsFrom: TypeDefinition;
+    implements: Array<TypeDefinition>;
 
-    constructor(name: string, properties: Array<PropertyDefinition>, constructors: Array<ConstructorDefinition>, 
+    constructor(packageString: string, name: string, properties: Array<PropertyDefinition>, constructors: Array<ConstructorDefinition>, 
             methods: Array<MethodDefinition>, enums: Array<EnumDefinition> = [], 
-            dependencies: Array<DefinitionHelper> = [], isDataClass: boolean = false) {
+            dependencies: Array<string> = [], isDataClass: boolean = false) {
+        this.package = packageString;
         this.name = name;
         this.properties = properties;
         this.constructors = constructors;
@@ -28,9 +32,9 @@ class ClassDefinition implements PrintableLanguageElements {
     }
 
     print(languageDefinition: LanguageDefinition) {
-        const imports = languageDefinition.importDeclarations(this.dependencies.map((dependency) => {
-            return dependency.name;
-        }));
+        const packageString = languageDefinition.printPackage(this.package);
+
+        const imports = languageDefinition.importDeclarations(this.dependencies);
 
         let constructors = '';
 
@@ -71,11 +75,11 @@ class ClassDefinition implements PrintableLanguageElements {
 
         let modelClassString;
         if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
-            modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, false, null);
+            modelClassString = languageDefinition.classDeclaration(this.name, this.inheritsFrom, this.implements, classBody, false, null);
         } else{
-            modelClassString = languageDefinition.classDeclaration(this.name, null, classBody, true, this.constructors);
+            modelClassString = languageDefinition.classDeclaration(this.name, this.inheritsFrom, this.implements, classBody, true, this.constructors);
         }
-        return [imports, modelClassString].join('\n\n');
+        return [packageString, imports, modelClassString].join('\n\n');
     }
 }
 

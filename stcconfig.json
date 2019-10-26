@@ -4,23 +4,17 @@
       "classesSettings": {
         "MODEL_CLASSES": {
           "implementsInterfaces": [
-            "Copyable"
+            "com.adqmobile.utils.Copyable"
           ],
-          "language": "KOTLIN",
-          "rootProjectDirectory": "/Users/alanquintiliano/Development/android/test",
-          "srcDirectory": "src/androidMain/kotlin",
           "module": "domain",
           "package": "com.adqmobile.test.domain.models",
-          "inheritsFrom": "Entity"
+          "inheritsFrom": "com.adqmobile.test.domain.Entity"
         },
         "DATABASE_CLASSES": {
           "implementsInterfaces": [],
-          "language": "KOTLIN",
-          "rootProjectDirectory": "/Users/alanquintiliano/Development/android/test",
-          "srcDirectory": "src/androidMain/kotlin",
           "module": "data",
           "package": "com.adqmobile.test.data.database",
-          "inheritsFrom": "DAO"
+          "inheritsFrom": "com.adqmobile.test.data.database.DAO"
         }
       },
       "language": "KOTLIN",

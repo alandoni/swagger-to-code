@@ -35,10 +35,15 @@ export default class ConfigurationFileBuilder {
             }
         }
 
-        classSettings.inheritsFrom = await StringUtils.readln(`Specify the class your ${typeOfClassString} classes inherits from if needed`);
+        let packageObservation = '';
+        if (languageSettings.language === Languages.KOTLIN) {
+            packageObservation = ' (include the package)';
+        }
+
+        classSettings.inheritsFrom = await StringUtils.readln(`Specify the class your ${typeOfClassString} classes inherits from if needed${packageObservation}`);
 
         let specifiedInterface = null;
-        console.log(`Now, if needed, you can specify the interfaces your ${typeOfClassString} classes implement`);
+        console.log(`Now, if needed, you can specify the interfaces your ${typeOfClassString} classes implement${packageObservation}`);
         while (specifiedInterface === null || specifiedInterface.length > 0) {
             specifiedInterface = await StringUtils.readln(`Add an interface`);
 
@@ -47,6 +52,9 @@ export default class ConfigurationFileBuilder {
             }
         }
 
+        delete(classSettings.rootProjectDirectory);
+        delete(classSettings.srcDirectory);
+        delete(classSettings.language);
         languageSettings.insertClassSetting(typeOfClass, classSettings);
     }
 

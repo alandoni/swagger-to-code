@@ -8,6 +8,15 @@ class Configuration {
     insertLanguage(language: string, settings: LanguageSettings) {
         this.languages[language] = settings;
     }
+
+    getLanguageSettings(language: string): LanguageSettings {
+        return Object.assign(new LanguageSettings(language), this.languages[language]);
+    }
+
+    getClassSettings(language: string, typeOfClass: TypeOfClass): ClassSettings {
+        const languageSettings = this.getLanguageSettings(language);
+        return languageSettings.getClassSettings(typeOfClass);
+    }
 }
 
 class LanguageSettings {
@@ -30,6 +39,14 @@ class LanguageSettings {
 
     insertClassSetting(kindOfClass: TypeOfClass, classSettings: ClassSettings) {
         this.classesSettings[kindOfClass] = classSettings;
+    }
+
+    getClassSettings(typeOfClass: TypeOfClass): ClassSettings {
+        return Object.assign(new ClassSettings(
+            this.language,
+            this.rootProjectDirectory,
+            this.srcDirectory[this.language])
+            , this.classesSettings[typeOfClass]);
     }
 }
 
@@ -55,7 +72,7 @@ class ClassSettings {
         this.srcDirectory = srcDirectory;
     }
 
-    modelClassesDirectory() {
+    directory(): string {
         return [
             this.rootProjectDirectory,
             this.module,

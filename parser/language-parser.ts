@@ -1,35 +1,24 @@
-import Languages from '../languages/languages';
 
 import LanguageDefinition from '../languages/language-definition';
-import KotlinLanguageDefinition from '../languages/kotlin-language-definition';
 
 import ModelClassParser from './model-class-parser';
 import DatabaseTableSchemaClassParser from './database-table-schema-class-parser';
 
 import SqliteLanguageDefinition from '../languages/sqlite-language-definition';
 import { YamlDefinition, YamlType, YamlProperty } from './swagger-objects-representation/definition';
-import JavascriptLanguageDefinition from '../languages/javascript-language-definition';
-
-class LanguageDefinitionFactory {
-    static makeLanguageDefinition(language: string): LanguageDefinition {
-        if (language === Languages.KOTLIN) {
-            return new KotlinLanguageDefinition();
-        } else if (language === Languages.SWIFT) {
-            return null; //new SwiftLanguageDefinition();
-        } else if (language === Languages.TYPESCRIPT) {
-            return null; //new TypescriptLanguageDefinition();
-        } else {
-            return new JavascriptLanguageDefinition();
-        }
-    }
-}
+import { TypeOfClass, Configuration, LanguageSettings } from '../configuration';
+import { LanguageDefinitionFactory } from './language-definition-factory';
+import ClassDefinition from './definitions/class-definition';
+import Parser from './parser-interface';
 
 class LanguageParser {
     preparedDefinitions: Map<string, DefinitionHelper>;
     definitions: Array<DefinitionHelper>;
     languageDefinition: LanguageDefinition;
+    configuration: LanguageSettings;
 
-    parse(object: any, language: string) {
+    parse(object: any, language: string, configuration: Configuration): Array<ClassFile> {
+        this.configuration = configuration.getLanguageSettings(language);
         this.languageDefinition = LanguageDefinitionFactory.makeLanguageDefinition(language);
         const sqliteLanguageDefinition = new SqliteLanguageDefinition();
 
@@ -44,21 +33,32 @@ class LanguageParser {
 
         const classes = [];
         this.definitions.forEach((definition) => {
-            const modelParser = new ModelClassParser(this.languageDefinition, definition);
-            let classDefinition = modelParser.parse();
-            classes.push({fileName: `${classDefinition.name}.${this.languageDefinition.fileExtension}`,
-                definition: classDefinition, 
-                content: classDefinition.print(this.languageDefinition)});
+            const modelParser = new ModelClassParser(
+                this.languageDefinition, 
+                definition, 
+                this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES)
+            );
+            classes.push(this.createClassFile(modelParser, TypeOfClass.MODEL_CLASSES));
+
             if (definition.needsTable) {
-                const tableSchemaParser = new DatabaseTableSchemaClassParser(this.languageDefinition, sqliteLanguageDefinition, definition);
-                classDefinition = tableSchemaParser.parse();
-                classes.push({fileName: `${classDefinition.name}.${this.languageDefinition.fileExtension}`,
-                    definition: classDefinition, 
-                    content: classDefinition.print(this.languageDefinition)});
+                const tableSchemaParser = new DatabaseTableSchemaClassParser(
+                    this.languageDefinition, 
+                    sqliteLanguageDefinition, 
+                    definition, this.configuration);
+                classes.push(this.createClassFile(tableSchemaParser, TypeOfClass.DATABASE_CLASSES));
             }
         });
 
         return classes;
+    }
+
+    createClassFile(parser: Parser, typeOfClass: TypeOfClass): ClassFile {
+        const classDefinition = parser.parse();
+        const fileName = `${classDefinition.name}.${this.languageDefinition.fileExtension}`;
+        const content = classDefinition.print(this.languageDefinition);
+        const classesSettings = this.configuration.getClassSettings(typeOfClass);
+        const directory = classesSettings.directory();
+        return new ClassFile(directory, fileName, classDefinition, content, typeOfClass);
     }
 
     static doesDefinitionNeedTable(definition: DefinitionHelper) {
@@ -172,6 +172,24 @@ class LanguageParser {
     }
 }
 
+class ClassFile {
+    directory: string;
+    file: string;
+    content: string;
+    type: TypeOfClass;
+    classDefinition: ClassDefinition;
+    className: string;
+
+    constructor(directory: string, file: string, classDefinition: ClassDefinition, content: string, type: TypeOfClass) {
+        this.directory = directory;
+        this.file = file;
+        this.classDefinition = classDefinition;
+        this.className = classDefinition.name;
+        this.content = content;
+        this.type = type;
+    }
+}
+
 class DefinitionHelper {
     name: string;
     needsTable: boolean;
@@ -279,5 +297,6 @@ export {
     DefinitionHelper,
     DefinitionPropertiesHelper,
     DefinitionReferenceHelper,
-    RelationshipType
+    RelationshipType,
+    ClassFile
 }

@@ -1,4 +1,4 @@
-import { KOTLIN, SWIFT, TYPESCRIPT } from '../languages/languages';
+import Languages from '../languages/languages';
 
 import LanguageDefinition from '../languages/language-definition';
 import KotlinLanguageDefinition from '../languages/kotlin-language-definition';
@@ -12,11 +12,11 @@ import JavascriptLanguageDefinition from '../languages/javascript-language-defin
 
 class LanguageDefinitionFactory {
     static makeLanguageDefinition(language: string): LanguageDefinition {
-        if (language === KOTLIN) {
+        if (language === Languages.KOTLIN) {
             return new KotlinLanguageDefinition();
-        } else if (language === SWIFT) {
+        } else if (language === Languages.SWIFT) {
             return null; //new SwiftLanguageDefinition();
-        } else if (language === TYPESCRIPT) {
+        } else if (language === Languages.TYPESCRIPT) {
             return null; //new TypescriptLanguageDefinition();
         } else {
             return new JavascriptLanguageDefinition();

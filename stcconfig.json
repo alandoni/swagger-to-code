@@ -1,0 +1,30 @@
+{
+  "languages": {
+    "KOTLIN": {
+      "modelClassesImplementsInterfaces": [
+        "Copyable"
+      ],
+      "databaseClassesImplementsInterfaces": [],
+      "language": "KOTLIN",
+      "srcDirectory": {
+        "KOTLIN": [
+          "src",
+          "androidMain",
+          "kotlin"
+        ],
+        "JAVASCRIPT": [],
+        "SWIFT": [],
+        "TYPESCRIPT": []
+      },
+      "mainPackage": "com.adqmobile.test",
+      "rootProjectDirectory": "D:\\Development\\Android\\Test",
+      "modelClassesModule": "domain",
+      "modelClassesPackage": "com.adqmobile.test.domain.models",
+      "modelClassesInheritsFrom": "Entity",
+      "databaseClassesModule": "data",
+      "databaseClassesPackage": "com.adqmobile.test.data.database",
+      "databaseClassesInheritsFrom": "DAO"
+    }
+  },
+  "swaggerFile": "C:\\Users\\Alan\\Documents\\swagger.yaml"
+}

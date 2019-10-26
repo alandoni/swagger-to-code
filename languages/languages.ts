@@ -1,19 +1,15 @@
-const KOTLIN = 'KOTLIN';
-const SWIFT = 'SWIFT';
-const JAVASCRIPT = 'JAVASCRIPT';
-const TYPESCRIPT = 'TYPESCRIPT';
+class Languages {
+    static KOTLIN = 'KOTLIN';
+    static SWIFT = 'SWIFT';
+    static JAVASCRIPT = 'JAVASCRIPT';
+    static TYPESCRIPT = 'TYPESCRIPT';
 
-const acceptedLanguages = [
-    KOTLIN,
-    SWIFT,
-    JAVASCRIPT,
-    TYPESCRIPT
-];
+    static ACCEPTED_LANGUAGES = [
+        Languages.KOTLIN,
+        Languages.SWIFT,
+        Languages.JAVASCRIPT,
+        Languages.TYPESCRIPT
+    ];
+}
 
-export { 
-    KOTLIN,
-    SWIFT,
-    JAVASCRIPT,
-    TYPESCRIPT,
-    acceptedLanguages 
-};
+export default Languages;

@@ -30,7 +30,7 @@ class LanguageParser {
     languageDefinition: LanguageDefinition;
 
     parse(object: any, language: string) {
-        const languageDefinition = LanguageDefinitionFactory.makeLanguageDefinition(language);
+        this.languageDefinition = LanguageDefinitionFactory.makeLanguageDefinition(language);
         const sqliteLanguageDefinition = new SqliteLanguageDefinition();
 
         const yamlDefinitions = this.convertYamlDefinitions(Object.entries(object.definitions));
@@ -44,17 +44,17 @@ class LanguageParser {
 
         const classes = [];
         this.definitions.forEach((definition) => {
-            const modelParser = new ModelClassParser(languageDefinition, definition);
+            const modelParser = new ModelClassParser(this.languageDefinition, definition);
             let classDefinition = modelParser.parse();
-            classes.push({fileName: `${classDefinition.name}.${languageDefinition.fileExtension}`,
+            classes.push({fileName: `${classDefinition.name}.${this.languageDefinition.fileExtension}`,
                 definition: classDefinition, 
-                content: classDefinition.print(languageDefinition)});
+                content: classDefinition.print(this.languageDefinition)});
             if (definition.needsTable) {
-                const tableSchemaParser = new DatabaseTableSchemaClassParser(languageDefinition, sqliteLanguageDefinition, definition);
+                const tableSchemaParser = new DatabaseTableSchemaClassParser(this.languageDefinition, sqliteLanguageDefinition, definition);
                 classDefinition = tableSchemaParser.parse();
-                classes.push({fileName: `${classDefinition.name}.${languageDefinition.fileExtension}`,
+                classes.push({fileName: `${classDefinition.name}.${this.languageDefinition.fileExtension}`,
                     definition: classDefinition, 
-                    content: classDefinition.print(languageDefinition)});
+                    content: classDefinition.print(this.languageDefinition)});
             }
         });
 
@@ -70,9 +70,9 @@ class LanguageParser {
     convertYamlDefinitions(definitions: Array<any>): Array<YamlDefinition> {
         return definitions.map((definition: Array<any>) => {
             const name = definition[0];
-            const properties = definition[1].properties.map((property: Array<any>) => {
+            const properties = Object.entries(definition[1].properties).map((property: Array<any>) => {
                 const name = property[0];
-                const type = new YamlType(property[1].type, new YamlType(property[1].items.type || property[1].items.$ref, null));
+                const type = new YamlType(property[1].type || property[1].$ref, property[1].items ? new YamlType(property[1].items.type || property[1].items.$ref, null) : null);
                 const defaultValue = property[1].default;
                 const enumValues = property[1].enum;
                 return new YamlProperty(name, type, defaultValue, enumValues);

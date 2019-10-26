@@ -1,5 +1,5 @@
 import LanguageDefinition from "../languages/language-definition";
-import { DefinitionHelper } from "./language-parser";
+import { DefinitionHelper, DefinitionPropertiesHelper } from "./language-parser";
 import ClassDefinition from "./definitions/class-definition";
 import ConstructorDefinition from "./definitions/constructor-definition";
 import ParameterDefinition from "./definitions/parameter-definition";
@@ -107,7 +107,7 @@ export default class ModelClassParser {
         });
     }
 
-    static getPropertyType(languageDefinition, property): TypeDefinition {
+    static getPropertyType(languageDefinition: LanguageDefinition, property: DefinitionPropertiesHelper): TypeDefinition {
         let isEnum = false;
         if (property.enum) {
             isEnum = true;
@@ -132,6 +132,6 @@ export default class ModelClassParser {
             return new TypeDefinition(languageDefinition.mapKeyword, false, null, isEnum);
         }
 
-        return new TypeDefinition(property.type.name || property.type, false, null, isEnum);
+        return new TypeDefinition(property.type, false, null, isEnum);
     }
 }

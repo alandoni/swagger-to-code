@@ -56,7 +56,9 @@ class ClassDefinition implements PrintableLanguageElements {
                 }).join('\n\n');
             }
 
-            methods = [...this.constructors, ...this.methods];
+            if (this.constructors) {
+                methods = [...this.constructors, ...this.methods];
+            }
         }
 
         const methodsString = methods.map((method) => {

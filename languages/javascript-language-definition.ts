@@ -121,7 +121,7 @@ ${body}
         const parameters = properties.map((property) => {
             return ParameterDefinition.fromProperty(property);
         });
-        return `contructor(${this.printParametersNamesWithTypes(parameters, false)}) {
+        return `constructor(${this.printParametersNamesWithTypes(parameters, false)}) {
 ${parameters.map((value) => {
             return `\t\tthis.${value.name} = ${value.name};`;
         }).join('\n')}

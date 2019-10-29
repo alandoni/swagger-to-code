@@ -4,17 +4,16 @@
       "classesSettings": {
         "MODEL_CLASSES": {
           "implementsInterfaces": [
-            "com.adqmobile.utils.Copyable"
+            "com.adqmobile.domain.utils.Copyable<$this>"
           ],
           "module": "domain",
-          "package": "com.adqmobile.test.domain.models",
-          "inheritsFrom": "com.adqmobile.test.domain.Entity"
+          "package": "com.adqmobile.domain.models",
+          "inheritsFrom": "com.adqmobile.domain.Entity"
         },
         "DATABASE_CLASSES": {
           "implementsInterfaces": [],
           "module": "data",
-          "package": "com.adqmobile.test.data.database",
-          "inheritsFrom": "com.adqmobile.test.data.database.DAO"
+          "package": "com.adqmobile.data.database"
         }
       },
       "language": "KOTLIN",

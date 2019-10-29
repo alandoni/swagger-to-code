@@ -34,12 +34,12 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     needDeclareFields = false;
 
     printPackage(packageString: string) {
-        return `package ${packageString};`;
+        return `package ${packageString}`;
     }
 
     importDeclarations(imports: Array<string>): string {
         return imports.map((importFile) => {
-            return `import ${importFile};`;
+            return `import ${importFile}`;
         }).join('\n');
     }
 
@@ -54,7 +54,7 @@ class KotlinLanguageDefinition implements LanguageDefinition {
         }
         if (implementsInterfaces.length > 0) {
             const interfacesString = implementsInterfaces.map((interfaceType) => {
-                return interfaceType.name;
+                return interfaceType.print(this);
             }).join(', ');
             inherits += `, ${interfacesString}`;
         }
@@ -124,7 +124,6 @@ ${body}
         if (defaultValue) {
             field += ` = ${defaultValue}`;
         }
-        field += ';';
         return field;
     }
 
@@ -145,11 +144,11 @@ ${body}
         if (defaultValue) {
             variable += ` = ${defaultValue}`;
         }
-        return variable +=';';
+        return variable;
     }
 
     returnDeclaration(value: string): string {
-        return `return ${value};`;
+        return `return ${value}`;
     }
 
     constructorProperties(properties: Array<PropertyDefinition>): string {
@@ -158,7 +157,7 @@ ${body}
             shouldBreakLine = false;
         }
         const parameters = properties.map((property) => {
-            return ParameterDefinition.fromProperty(property);
+            return ParameterDefinition.fromProperty(property, property.modifiers);
         });
         return `(${this.printParametersNamesWithTypes(parameters, shouldBreakLine)})`;
     }
@@ -200,7 +199,7 @@ ${values.map((value) => {
     }
 
     assignment(name1: string, name2: string): string {
-        return `${name1} = ${name2};`;
+        return `${name1} = ${name2}`;
     }
 
     constructObject(type: TypeDefinition, parameters: Array<string> = []): string {

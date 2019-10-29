@@ -43,15 +43,18 @@ export default class DatabaseTableSchemaClassParser implements Parser {
 
         const classSettings = this.configuration.getClassSettings(TypeOfClass.DATABASE_CLASSES);
 
-        const inherits = TypeDefinition.typeBySplittingPackageAndName(classSettings.inheritsFrom);
+        let inherits = null;
+        if (classSettings.inheritsFrom) {
+            inherits = TypeDefinition.typeBySplittingPackageAndName(classSettings.inheritsFrom, className);
+        }
         const implementsInterfaces = classSettings.implementsInterfaces.map((interfaceString) => {
-            return TypeDefinition.typeBySplittingPackageAndName(interfaceString);
+            return TypeDefinition.typeBySplittingPackageAndName(interfaceString, className);
         });
 
         const dependencies = [
             ...nativeDependencies, 
             ...parseDependencies,
-            inherits.package,
+            inherits ? inherits.package : null,
             ...implementsInterfaces.map((interfaceType) => {
                 return interfaceType.package;
             }),
@@ -63,7 +66,9 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             }).filter((dependency) => {
                 return dependency != null;
             }),
-        ];
+        ].filter((dependency) => {
+            return dependency !== null;
+        });
         
         let tableNameString = new PropertyDefinition(
             DatabaseTableSchemaClassParser.tableNameProperty,
@@ -326,7 +331,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
                 methodName = 'batchInsertOrUpdate';
             }
             const constructObject = this.languageDefinition.constructObject(new TypeDefinition(`${property.type.subtype.name}${DatabaseTableSchemaClassParser.classSufix}`), []);
-            return `\t\t${this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}`])};`;
+            return `\t\t${this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}`])}`;
         }).join('\n');
 
         const callExecSqlMethod = this.languageDefinition.methodCall('db', 'execSQL', [statement]);

@@ -13,7 +13,6 @@ import Parser from './parser-interface';
 
 class LanguageParser {
     preparedDefinitions: Map<string, DefinitionHelper>;
-    definitions: Array<DefinitionHelper>;
     languageDefinition: LanguageDefinition;
     configuration: LanguageSettings;
 
@@ -24,11 +23,8 @@ class LanguageParser {
 
         const yamlDefinitions = this.convertYamlDefinitions(Object.entries(object.definitions));
         this.preparedDefinitions = this.prepareDefinitions(yamlDefinitions);
-        this.definitions = Object.entries(this.preparedDefinitions).map((entry) => {
-            return entry[1];
-        })
-        this.createDefinitionsFromProperties(this.definitions);
 
+        this.createDefinitionsFromProperties(this.definitions);
         this.prepareReferences();
 
         const classes = [];
@@ -52,6 +48,12 @@ class LanguageParser {
         return classes;
     }
 
+    get definitions() {
+        return Object.entries(this.preparedDefinitions).map((entry) => {
+            return entry[1];
+        });
+    }
+
     createClassFile(parser: Parser, typeOfClass: TypeOfClass): ClassFile {
         const classDefinition = parser.parse();
         const fileName = `${classDefinition.name}.${this.languageDefinition.fileExtension}`;
@@ -62,7 +64,7 @@ class LanguageParser {
     }
 
     static doesDefinitionNeedTable(definition: DefinitionHelper) {
-        return definition.properties.filter((property: DefinitionPropertiesHelper) => {
+        return definition.properties.filter((property: DefinitionPropertyHelper) => {
             return property.name === 'id';
         }).length > 0;
     }
@@ -70,39 +72,47 @@ class LanguageParser {
     convertYamlDefinitions(definitions: Array<any>): Array<YamlDefinition> {
         return definitions.map((definition: Array<any>) => {
             const name = definition[0];
-            const properties = Object.entries(definition[1].properties).map((property: Array<any>) => {
-                const name = property[0];
-                const type = new YamlType(property[1].type || property[1].$ref, property[1].items ? new YamlType(property[1].items.type || property[1].items.$ref, null) : null);
-                const defaultValue = property[1].default;
-                const enumValues = property[1].enum;
-                return new YamlProperty(name, type, defaultValue, enumValues);
-            });
+            const properties = this.convertYamlProperties(definition[1].properties);
             const type = new YamlType(definition[1].type, null);
             const requiredProperties = definition[1].required;
             return new YamlDefinition(name, type, properties, requiredProperties);
         });
     }
 
-    prepareDefinitions(definitions: Array<YamlDefinition>): Map<string, DefinitionHelper> {
+    convertYamlProperties(properties: any): Array<YamlProperty> {
+        return Object.entries(properties).map((property: Array<any>) => {
+            const name = property[0];
+            const type = new YamlType(property[1].type || property[1].$ref, property[1].items ? new YamlType(property[1].items.type || property[1].items.$ref, null) : null);
+            const defaultValue = property[1].default;
+            const enumValues = property[1].enum;
+            let subProperties = null;
+            if (property[1].properties) {
+                subProperties = this.convertYamlProperties(property[1].properties);
+            }
+            return new YamlProperty(name, type, subProperties, defaultValue, enumValues);
+        });
+    }
+
+    prepareDefinitions(yamlDefinitions: Array<YamlDefinition>): Map<string, DefinitionHelper> {
         const preparedDefinitions: Map<string, DefinitionHelper> = new Map();
-        definitions.forEach((definition) => {
-            preparedDefinitions[definition.name] = new DefinitionHelper(definition.name, definition.properties, definition.required);
-            preparedDefinitions[definition.name].needsTable = LanguageParser.doesDefinitionNeedTable(preparedDefinitions[definition.name]);
+        yamlDefinitions.forEach((yamlDefinition) => {
+            preparedDefinitions[yamlDefinition.name] = new DefinitionHelper(yamlDefinition.name, yamlDefinition.properties, yamlDefinition.required);
+            preparedDefinitions[yamlDefinition.name].needsTable = LanguageParser.doesDefinitionNeedTable(preparedDefinitions[yamlDefinition.name]);
         });
         return preparedDefinitions;
     }
 
     prepareReferences() {
         this.definitions.filter((definition) => {
-            definition.properties.filter((property: DefinitionPropertiesHelper) => {
+            definition.properties.filter((property: DefinitionPropertyHelper) => {
                 const refersTo = property.items && this.preparedDefinitions[property.items.type];
                 return property.type === 'array' && refersTo && this.preparedDefinitions[refersTo].needsTable;
-            }).map((property: DefinitionPropertiesHelper) => { // All properties that depends on array of other definition on database
+            }).map((property: DefinitionPropertyHelper) => { // All properties that depends on array of other definition on database
                 const refersTo = this.preparedDefinitions[property.items.type];
                 property.items.type = refersTo;
                 property.setReference(refersTo);
 
-                const propertyReferringToDefinition = refersTo.properties.find((property: DefinitionPropertiesHelper) => {
+                const propertyReferringToDefinition = refersTo.properties.find((property: DefinitionPropertyHelper) => {
                     const propertyName = definition.name;
                     const varName = propertyName.substr(0, 1).toLowerCase() + propertyName.substr(1);
                     return property.name === `${varName}Id`;
@@ -115,12 +125,12 @@ class LanguageParser {
                 } 
             });
 
-            definition.properties.filter((property: DefinitionPropertiesHelper) => {
+            definition.properties.filter((property: DefinitionPropertyHelper) => {
                 const refersTo = this.preparedDefinitions[property.type];
                 return refersTo;
-            }).map((property: DefinitionPropertiesHelper) => {  // All properties that depends on other definition on database
+            }).map((property: DefinitionPropertyHelper) => {  // All properties that depends on other definition on database
                 const refersTo = this.preparedDefinitions[property.type];
-                property.type = refersTo;
+                property.type = refersTo.name;
                 property.setReference(refersTo);
                 definition.addReference(new DefinitionReferenceHelper(refersTo, property, RelationshipType.ONE_TO_ONE));
             });
@@ -141,7 +151,7 @@ class LanguageParser {
         const newDefinitions: Map<string, DefinitionHelper> = new Map();
         definitions.filter((definition) => {
             return definition.properties.filter((property) => {
-                !ModelClassParser.getPropertyType(this.languageDefinition, property).isNative
+                return !ModelClassParser.getPropertyType(this.languageDefinition, property).isNative
                     && (!this.preparedDefinitions[property.type] || !this.preparedDefinitions[property.type].needsTable);
             }).length > 0;
         }).map((definition) => { // all definitions that has a untyped property
@@ -152,11 +162,14 @@ class LanguageParser {
                 let name = property.name;
                 name = `${name.substr(0, 1).toUpperCase()}${name.substr(1)}`;
 
-                let properties = property.subProperties || this.preparedDefinitions[name].properties;
+                const properties = property.subProperties || this.preparedDefinitions[name].properties;
+                const yamlProperties = properties.map((property) => {
+                    return YamlProperty.fromDefinitionPropertyHelper(property);
+                });
                 if (property.subProperties) {
+                    this.preparedDefinitions[name] = new DefinitionHelper(name, yamlProperties, null);
                     property.type = name;
                     property.subProperties = null;
-                    this.preparedDefinitions[name] = new DefinitionHelper(name, properties, null);
                     newDefinitions[name] = this.preparedDefinitions[name];
                 } else {
                     property.subProperties = properties;
@@ -193,7 +206,7 @@ class ClassFile {
 class DefinitionHelper {
     name: string;
     needsTable: boolean;
-    properties: Array<DefinitionPropertiesHelper>;
+    properties: Array<DefinitionPropertyHelper>;
     requiredProperties: Array<string>;
     references: Array<DefinitionReferenceHelper>;
     useFieldsAsPartOfTheSameTable: boolean;
@@ -203,7 +216,7 @@ class DefinitionHelper {
 
         if (properties) {
             this.properties = properties.map((property: YamlProperty) => {
-                return new DefinitionPropertiesHelper(
+                return new DefinitionPropertyHelper(
                     property.name,
                     property.type.name,
                     requiredProperties ? requiredProperties.indexOf(property.name) > -1 : false,
@@ -222,14 +235,14 @@ class DefinitionHelper {
     }
 }
 
-class DefinitionPropertiesHelper {
+class DefinitionPropertyHelper {
     name: string;
     type: string;
     required: boolean;
     enum: Array<string>;
     default: string;
     items: any;
-    subProperties: Array<DefinitionPropertiesHelper>;
+    subProperties: Array<DefinitionPropertyHelper>;
     refersTo;
     
     constructor(name: string, type: string, required: boolean, subProperties: Array<YamlProperty>, defaultValue: string, enumValues: Array<string>, arrayItems: any) {
@@ -247,7 +260,7 @@ class DefinitionPropertiesHelper {
 
         if (subProperties) {
             this.subProperties = subProperties.map((property) => {
-                return new DefinitionPropertiesHelper(
+                return new DefinitionPropertyHelper(
                     property.name,
                     property.type.name,
                     null,
@@ -281,10 +294,10 @@ enum RelationshipType {
 
 class DefinitionReferenceHelper {
     definition: DefinitionHelper;
-    property: DefinitionPropertiesHelper;
+    property: DefinitionPropertyHelper;
     relationship: RelationshipType;
 
-    constructor(definition: DefinitionHelper, property: DefinitionPropertiesHelper, relationship: RelationshipType) {
+    constructor(definition: DefinitionHelper, property: DefinitionPropertyHelper, relationship: RelationshipType) {
         this.definition = definition;
         this.property = property;
         this.relationship = relationship;
@@ -295,7 +308,7 @@ export default LanguageParser;
 
 export {
     DefinitionHelper,
-    DefinitionPropertiesHelper,
+    DefinitionPropertyHelper,
     DefinitionReferenceHelper,
     RelationshipType,
     ClassFile

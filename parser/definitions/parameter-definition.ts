@@ -11,7 +11,7 @@ class ParameterDefinition extends PropertyDefinition implements PrintableLanguag
     this.modifiers = modifiers;
   }
 
-  static fromProperty(property: PropertyDefinition, modifiers: Array<string> = []) {
+  static fromProperty(property: PropertyDefinition, modifiers: Array<string> = []): ParameterDefinition {
     return new ParameterDefinition(property.name, 
       property.type, 
       property.value, 

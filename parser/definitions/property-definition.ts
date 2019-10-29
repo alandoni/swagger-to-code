@@ -8,6 +8,7 @@ class PropertyDefinition implements PrintableLanguageElements {
     value: string;
     required: boolean;
     isPrivate: boolean;
+    modifiers: Array<string>;
 
     constructor(name: string, type: TypeDefinition, value: string, required: boolean = false, isPrivate: boolean = false) {
         this.name = name;

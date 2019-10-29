@@ -1,5 +1,5 @@
 import LanguageDefinition from "../languages/language-definition";
-import { DefinitionHelper, DefinitionPropertiesHelper } from "./language-parser";
+import { DefinitionHelper, DefinitionPropertyHelper } from "./language-parser";
 import ClassDefinition from "./definitions/class-definition";
 import ConstructorDefinition from "./definitions/constructor-definition";
 import ParameterDefinition from "./definitions/parameter-definition";
@@ -25,19 +25,24 @@ export default class ModelClassParser implements Parser {
         const className = this.definition.name;
         const properties = this.parseProperties();
         
-        const inherits = TypeDefinition.typeBySplittingPackageAndName(this.configuration.inheritsFrom);
+        let inherits = null;
+        if (this.configuration.inheritsFrom) {
+            inherits = TypeDefinition.typeBySplittingPackageAndName(this.configuration.inheritsFrom, className);
+        }
         const implementsInterfaces = this.configuration.implementsInterfaces.map((interfaceString) => {
-            return TypeDefinition.typeBySplittingPackageAndName(interfaceString);
+            return TypeDefinition.typeBySplittingPackageAndName(interfaceString, className);
         });
 
         let dependencies = ModelClassParser.parseDependencies(this.definition, this.configuration);
         dependencies = [
-            inherits.package,
+            inherits ? inherits.package : null,
             ...implementsInterfaces.map((interfaceType) => {
                 return interfaceType.package;
             }),
             ...dependencies,
-        ];
+        ].filter((dependency) => {
+            return dependency !== null;
+        });
 
         const enums = this.parseEnums(properties);
 
@@ -128,7 +133,7 @@ export default class ModelClassParser implements Parser {
         });
     }
 
-    static getPropertyType(languageDefinition: LanguageDefinition, property: DefinitionPropertiesHelper): TypeDefinition {
+    static getPropertyType(languageDefinition: LanguageDefinition, property: DefinitionPropertyHelper): TypeDefinition {
         let isEnum = false;
         if (property.enum) {
             isEnum = true;

@@ -23,11 +23,18 @@ class TypeDefinition implements PrintableLanguageElements {
         }
     }
 
-    static typeBySplittingPackageAndName(packageString: string): TypeDefinition {
+    static typeBySplittingPackageAndName(packageString: string, subtypeIfNeeded: string): TypeDefinition {
         const names = packageString.split('.');
-        const name = names[names.length - 1];
-        const type = new TypeDefinition(name, false, null, false);
-        type.package = packageString;
+        let name = names[names.length - 1];
+        let subtype = null;
+        let newPackageString = packageString;
+        if (name.indexOf('<$this>') > -1) {
+            subtype = new TypeDefinition(subtypeIfNeeded, false, null, false);
+            name = name.substr(0, name.indexOf('<$this>'));
+            newPackageString = packageString.substr(0, packageString.indexOf('<$this>'));
+        }
+        const type = new TypeDefinition(name, false, subtype, false);
+        type.package = newPackageString;
         return type;
     }
 }

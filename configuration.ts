@@ -31,7 +31,7 @@ class LanguageSettings {
     constructor(language: string) {
         this.language = language;
         this.srcDirectory = new Map();
-        this.srcDirectory[Languages.KOTLIN] = ['src', 'androidMain', 'kotlin'].join(path.sep);
+        this.srcDirectory[Languages.KOTLIN] = ['src', 'main', 'java'].join(path.sep);
         this.srcDirectory[Languages.JAVASCRIPT] = '';
         this.srcDirectory[Languages.SWIFT] = '';
         this.srcDirectory[Languages.TYPESCRIPT] = '';

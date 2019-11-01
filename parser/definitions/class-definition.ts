@@ -40,6 +40,9 @@ class ClassDefinition implements PrintableLanguageElements {
 
         if (!languageDefinition.constructorAlsoDeclareFields && this.constructors) {
             constructors = this.constructors.map((construct) => {
+                if (this.inheritsFrom && !languageDefinition.constructorAlsoDeclareFields) {
+                    construct.body = `\t\t${languageDefinition.emptySuperMethod}\n${construct.body}`;
+                }
                 return `\t${construct.print(languageDefinition)}`;
             }).join('\n\n');
         }

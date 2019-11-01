@@ -9,7 +9,7 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     name = Languages.KOTLIN;
     fileExtension = 'kt';
     useDataclassForModels = true;
-    isTypesafeLanguage = true;
+    isTypeSafeLanguage = true;
     thisKeyword = 'this';
     constKeyword = 'val';
     variableKeyword = 'var';
@@ -29,9 +29,12 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     privateKeyword = 'private';
     stringReplacement = '%s';
     equalMethodName = 'equals';
+    hashCodeMethodName = 'hashCode';
     varargsKeyword = 'varargs';
     constructorAlsoDeclareFields = true;
     needDeclareFields = false;
+    emptySuperMethod = this.methodCall(null, 'super', null);
+    overrideKeyword = 'override';
 
     printPackage(packageString: string) {
         return `package ${packageString}`;
@@ -48,9 +51,16 @@ class KotlinLanguageDefinition implements LanguageDefinition {
         if (isDataClass) {
             classType = 'data class';
         }
+        let constructor = '';
+        if (constructors && constructors.length > 0) {
+            constructor = this.constructorProperties(constructors[0].properties);
+        }
         let inherits = '';
         if (inheritsFrom) {
             inherits = ` : ${inheritsFrom.name}`;
+            if (constructor.length > 0) {
+                inherits += '()';
+            }
         }
         if (implementsInterfaces.length > 0) {
             const interfacesString = implementsInterfaces.map((interfaceType) => {
@@ -58,20 +68,21 @@ class KotlinLanguageDefinition implements LanguageDefinition {
             }).join(', ');
             inherits += `, ${interfacesString}`;
         }
-        let constructor = '';
-        if (constructors && constructors.length > 0) {
-            constructor = this.constructorProperties(constructors[0].properties);
-        }
         return `${classType} ${className}${constructor}${inherits} {\n\n${body}\n}`;
     }
 
-    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string): string {
+    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, modifiers: Array<string>): string {
         let returnString = '';
         if (returnType && returnType.print(this) && returnType.print(this).length > 0) {
             returnString = ` : ${returnType.print(this)}`;
         }
+        let modifiersString = '';
+        if (modifiers) {
+            modifiersString = modifiers.join(' ');
+            modifiersString += ' ';
+        }
 
-        return `fun ${methodName}(${this.printParametersNamesWithTypes(parameters, false)})${returnString} {
+        return `${modifiersString}fun ${methodName}(${this.printParametersNamesWithTypes(parameters, false)})${returnString} {
 ${body}
 \t}`;
     }
@@ -96,6 +107,20 @@ ${body}
             declareString = `${declareString} `;
         }
         return `${declareString}${parameter.name} : ${parameter.type.print(this)}`;
+    }
+
+    printType(type: TypeDefinition): string {
+        let nullable = '';
+        if (type.nullable) {
+            nullable = '?';
+        }
+        let result = '';
+        if (type.subtype) {
+            result = `${type.name}<${type.subtype.print(this)}>${nullable}`;
+        } else {
+            result =  `${type.name}${nullable}`;
+        }
+        return result;
     }
 
     printValues(values: Array<string>, shouldBreakLine: boolean): string {
@@ -178,19 +203,19 @@ ${values.map((value) => {
 
     ifStatement(condition: string, body: string): string {
         return `if (${condition}) {
-    ${body}
+\t\t\t${body}
 \t\t}`;
     }
 
     whileStatement(condition: string, body: string): string {
         return `while (${condition}) {
-    ${body}
+\t${body}
 \t\t}`;
     }
 
     lambdaMethod(caller: string, method: string, varName: string, body: string): string {
         return `${caller}.${method} { (${varName}) ->
-    ${body}
+\t\t\t${body}
 \t\t}`;
     }
 
@@ -229,12 +254,7 @@ ${values.map((value) => {
     }
 
     equalMethod(var1: string, var2: string, negative: boolean): string {
-        const equals = `${var1}.${this.equalMethodName}(${var2})`;
-        if (negative) {
-            return `!${equals}`;
-        } else {
-            return equals;
-        }
+        return this.simpleComparison(var1, var2, negative);
     }
 
     simpleComparison(var1: string, var2: string, negative: boolean): string {
@@ -243,6 +263,19 @@ ${values.map((value) => {
             equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
+    }
+
+    arrayComparison(var1: string, var2: string, negative: boolean): string {
+        let equal = '';
+        if (negative) {
+            equal = '!';
+        }
+        const callMethod = this.methodCall(var1, 'contentDeepEquals', [var2]);
+        return `${equal}${callMethod}`;
+    }
+
+    cast(obj: string, type: TypeDefinition): string {
+        return `${obj} as ${type.print(this)}`;
     }
 }
 

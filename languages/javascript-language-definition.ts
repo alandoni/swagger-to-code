@@ -10,7 +10,7 @@ class JavascriptLanguageDefinition implements LanguageDefinition {
     fileExtension = 'js';
     useDataclassForModels = false;
     needDeclareFields = false;
-    isTypesafeLanguage = false;
+    isTypeSafeLanguage = false;
     thisKeyword = 'this';
     constKeyword = 'const';
     variableKeyword = 'let';
@@ -30,8 +30,11 @@ class JavascriptLanguageDefinition implements LanguageDefinition {
     privateKeyword = '';
     stringReplacement = '%s';
     equalMethodName = 'isEqual';
+    hashCodeMethodName = null;
     varargsKeyword = '...';
     constructorAlsoDeclareFields = false;
+    emptySuperMethod = this.methodCall(null, 'super', null);
+    overrideKeyword = '';
 
     printPackage(_package: string) {
         return ``;
@@ -51,7 +54,7 @@ class JavascriptLanguageDefinition implements LanguageDefinition {
         return `class ${className}${inherits} {\n\n${body}\n}`;
     }
 
-    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, _returnType: TypeDefinition, body: string): string {
+    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, _returnType: TypeDefinition, body: string, _modifiers: Array<string>): string {
         return `${methodName}(${this.printParametersNamesWithTypes(parameters, false)}) {
 ${body}
 \t}`;
@@ -72,6 +75,14 @@ ${body}
 
     parameterDeclaration(parameter: ParameterDefinition): string {
         return parameter.name
+    }
+
+    printType(type: TypeDefinition): string {
+        if (type.subtype) {
+            return `${type.name}<${type.subtype.print(this)}>`;
+        } else {
+            return  `${type.name}`;
+        }
     }
 
     printValues(values: Array<string>, shouldBreakLine: boolean): string {
@@ -204,6 +215,14 @@ ${parameters.map((value) => {
             equal = '!=';
         }
         return `${var1} ${equal} ${var2}`;
+    }
+
+    arrayComparison(var1: string, var2: string, negative: boolean): string {
+        return this.equalMethod(var1, var2, negative);
+    }
+
+    cast(_obj: string, _type: TypeDefinition): string {
+        return '';
     }
 }
 

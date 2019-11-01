@@ -128,7 +128,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
                         this.databaseLanguageDefinition,
                         this.languageDefinition,
                         subProperty.name,
-                        ModelClassParser.getPropertyType(this.languageDefinition, subProperty),
+                        ModelClassParser.getPropertyType(this.languageDefinition, subProperty.type),
                         subProperty.required, null);
                     subObject.fieldName = `${prefix.toUpperCase()}_${subObject.fieldName}`;
                     subObject.databaseFieldName = `${prefix}_${subObject.databaseFieldName}`;
@@ -139,14 +139,14 @@ export default class DatabaseTableSchemaClassParser implements Parser {
                 return new DatabaseFieldHelper(this.databaseLanguageDefinition,
                     this.languageDefinition,
                     property.name,
-                    ModelClassParser.getPropertyType(this.languageDefinition, property),
+                    ModelClassParser.getPropertyType(this.languageDefinition, property.type),
                     property.required,
                     propertiesFromClass);
             }
 
             return new DatabaseFieldHelper(this.databaseLanguageDefinition, this.languageDefinition,
                 property.name,
-                ModelClassParser.getPropertyType(this.languageDefinition, property),
+                ModelClassParser.getPropertyType(this.languageDefinition, property.type),
                 property.required,
                 subObject);
         });
@@ -200,8 +200,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             [
                 DatabaseTableSchemaClassParser.databaseObject
             ],
-            methodString,
-            this.languageDefinition.publicKeyword);
+            methodString);
     }
 
     classNameToVar(className: string): string {
@@ -245,8 +244,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             [   
                 new ParameterDefinition('cursor', new TypeDefinition('Cursor')),
             ],
-            methodString,
-            this.languageDefinition.publicKeyword);
+            methodString);
     }
 
     handleNonNativeTypes(field: DatabaseFieldHelper) {
@@ -318,8 +316,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
                 DatabaseTableSchemaClassParser.databaseObject,
                 new ParameterDefinition(`${objectName}`, new TypeDefinition(`${className}`))
             ],
-            methodString,
-            this.languageDefinition.publicKeyword);
+            methodString);
     }
 
     getInsertMethodForNonNativeTypes(nonNativeTypes: Array<DatabaseFieldHelper>, objectName: string, methodString: string, statement: string) {
@@ -419,8 +416,7 @@ ${methods}
                 DatabaseTableSchemaClassParser.databaseObject, 
                 new ParameterDefinition(objectName, new TypeDefinition(this.languageDefinition.arrayKeyword, true, new TypeDefinition(className))),
             ],
-            methodString,
-            this.languageDefinition.publicKeyword);
+            methodString);
     }
 
     createDeleteMethod() {
@@ -439,8 +435,7 @@ ${methods}
                 DatabaseTableSchemaClassParser.databaseObject, 
                 new ParameterDefinition('id', new TypeDefinition(this.languageDefinition.intKeyword)),
             ],
-            returnCall,
-            this.languageDefinition.publicKeyword);
+            returnCall);
     }
 
     createReadListFromDbMethod() {
@@ -460,8 +455,7 @@ ${methods}
             [
                 new ParameterDefinition('cursor', new TypeDefinition('Cursor')),
             ],
-            methodBody,
-            this.languageDefinition.publicKeyword);
+            methodBody);
     }
 
     createListObject() {
@@ -512,8 +506,7 @@ ${tryCatch}
                 new ParameterDefinition('sql', new TypeDefinition(this.languageDefinition.stringKeyword)),
                 new ParameterDefinition('args', new TypeDefinition(this.languageDefinition.stringKeyword), null, false, [this.languageDefinition.varargsKeyword]),
             ],
-            methodBody,
-            this.languageDefinition.publicKeyword);
+            methodBody);
     }
 
     createSelectAllMethod() {
@@ -533,8 +526,7 @@ ${tryCatch}
             [
                 DatabaseTableSchemaClassParser.databaseObject,
             ],
-            returnCall,
-            this.languageDefinition.publicKeyword);
+            returnCall);
     }
 
     createSelectByIdMethod() {
@@ -563,8 +555,7 @@ ${tryCatch}
                 DatabaseTableSchemaClassParser.databaseObject,
                 new ParameterDefinition('id', new TypeDefinition(this.languageDefinition.intKeyword)),
             ],
-            methodBody,
-            this.languageDefinition.publicKeyword);
+            methodBody);
     }
 
     createMethodsBasedOnDependencies(fields: Array<DatabaseFieldHelper>) {
@@ -617,8 +608,7 @@ ${tryCatch}
                 DatabaseTableSchemaClassParser.databaseObject,
                 new ParameterDefinition('ids', new TypeDefinition(this.languageDefinition.arrayKeyword, false, new TypeDefinition(this.languageDefinition.stringKeyword))),
             ],
-            returnCall,
-            this.languageDefinition.publicKeyword);
+            returnCall);
     }
 
     createMethodToSelectNToOne(reference: DefinitionReferenceHelper, fieldReference: DatabaseFieldHelper) {
@@ -639,8 +629,7 @@ ${tryCatch}
                 DatabaseTableSchemaClassParser.databaseObject,
                 new ParameterDefinition(fieldReference.propertyName, new TypeDefinition(this.languageDefinition.stringKeyword)),
             ],
-            returnCall,
-            this.languageDefinition.publicKeyword);
+            returnCall);
     }
 }
 

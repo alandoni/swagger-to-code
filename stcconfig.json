@@ -3,9 +3,7 @@
     "KOTLIN": {
       "classesSettings": {
         "MODEL_CLASSES": {
-          "implementsInterfaces": [
-            "com.adqmobile.domain.utils.Copyable<$this>"
-          ],
+          "implementsInterfaces": [],
           "module": "domain",
           "package": "com.adqmobile.domain.models",
           "inheritsFrom": "com.adqmobile.domain.Entity"
@@ -18,8 +16,8 @@
       },
       "language": "KOTLIN",
       "mainPackage": "com.adqmobile.test",
-      "rootProjectDirectory": "/Users/alanquintiliano/Development/android/test"
+      "rootProjectDirectory": "D:\\Development\\Android\\Test"
     }
   },
-  "swaggerFile": "/Users/alanquintiliano/Documents/swagger.yaml"
+  "swaggerFile": "c:\\Users\\Alan\\Documents\\swagger.yaml"
 }

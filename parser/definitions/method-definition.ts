@@ -8,14 +8,14 @@ class MethodDefinition implements PrintableLanguageElements {
   returnType: TypeDefinition;
   parameters: Array<ParameterDefinition>;
   body: string;
-  visiblity: string;
+  modifiers: Array<string>;
 
-  constructor(name: string, returnType: TypeDefinition, parameters: Array<ParameterDefinition>, body: string, visiblity: string) {
+  constructor(name: string, returnType: TypeDefinition, parameters: Array<ParameterDefinition>, body: string, modifiers: Array<string> = null) {
     this.name = name;
     this.returnType = returnType;
     this.parameters = parameters;
     this.body =  body;
-    this.visiblity = visiblity;
+    this.modifiers = modifiers;
   }
 
   print(languageDefinition: LanguageDefinition) {
@@ -23,7 +23,8 @@ class MethodDefinition implements PrintableLanguageElements {
       this.name,
       this.parameters,
       this.returnType,
-      this.body);
+      this.body,
+      this.modifiers);
   }
 }
 

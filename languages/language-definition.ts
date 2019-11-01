@@ -8,7 +8,7 @@ interface LanguageDefinition {
     fileExtension: string;
     useDataclassForModels: boolean;
     needDeclareFields: boolean;
-    isTypesafeLanguage: boolean;
+    isTypeSafeLanguage: boolean;
     thisKeyword: string;
     constKeyword: string;
     variableKeyword: string;
@@ -28,8 +28,11 @@ interface LanguageDefinition {
     privateKeyword: string;
     stringReplacement: string;
     equalMethodName: string;
+    hashCodeMethodName: string;
     varargsKeyword: string;
     constructorAlsoDeclareFields: boolean;
+    emptySuperMethod: string;
+    overrideKeyword: string;
 
     printPackage(packageString: string);
 
@@ -37,11 +40,13 @@ interface LanguageDefinition {
 
     classDeclaration(className: string, inheritsFrom: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string;
 
-    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string): string;
+    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, modifiers: Array<string>): string;
 
     printParametersNamesWithTypes(parameters: Array<ParameterDefinition>, shouldBreakLine: boolean): string;
 
     parameterDeclaration(parameter: ParameterDefinition): string;
+
+    printType(type: TypeDefinition): string;
 
     printValues(values: Array<string>, shouldBreakLine: boolean): string;
 
@@ -78,6 +83,10 @@ interface LanguageDefinition {
     equalMethod(var1: string, var2: string, negative: boolean): string;
 
     simpleComparison(var1: string, var2: string, negative: boolean): string;
+
+    arrayComparison(var1: string, var2: string, negative: boolean): string;
+
+    cast(obj: string, type: TypeDefinition): string;
 }
 
 export default LanguageDefinition;

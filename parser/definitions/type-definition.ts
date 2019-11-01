@@ -7,20 +7,21 @@ class TypeDefinition implements PrintableLanguageElements {
     subtype: TypeDefinition;
     isNative: boolean;
     isEnum: boolean;
+    nullable: boolean;
 
-    constructor(name: string, isNative: boolean = false, subtype: TypeDefinition = null, isEnum: boolean = false) {
+    constructor(name: string, isNative: boolean = false, subtype: TypeDefinition = null, isEnum: boolean = false, nullable: boolean = false) {
+        if (!name) {
+            throw new Error('You must define a name');
+        }
         this.name = name;
         this.subtype = subtype;
         this.isNative = isNative;
         this.isEnum = isEnum;
+        this.nullable = nullable;
     }
 
     print(languageDefinition: LanguageDefinition) {
-        if (this.subtype) {
-            return `${this.name}<${this.subtype.print(languageDefinition)}>`;
-        } else {
-            return this.name;
-        }
+        return languageDefinition.printType(this);
     }
 
     static typeBySplittingPackageAndName(packageString: string, subtypeIfNeeded: string): TypeDefinition {

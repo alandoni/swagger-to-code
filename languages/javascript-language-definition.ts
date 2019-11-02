@@ -5,7 +5,7 @@ import ConstructorDefinition from "../parser/definitions/constructor-definition"
 import PropertyDefinition from "../parser/definitions/property-definition";
 import Languages from "./languages";
 
-class JavascriptLanguageDefinition implements LanguageDefinition {
+class JavascriptLanguageDefinition extends LanguageDefinition {
     name = Languages.JAVASCRIPT;
     fileExtension = 'js';
     useDataclassForModels = false;
@@ -17,6 +17,7 @@ class JavascriptLanguageDefinition implements LanguageDefinition {
     nullKeyword = 'null';
     anyTypeKeyword = '';
     intKeyword = 'int';
+    longKeyword = 'int';
     numberKeyword = 'float';
     stringKeyword = 'string';
     booleanKeyword = 'bool';
@@ -35,6 +36,10 @@ class JavascriptLanguageDefinition implements LanguageDefinition {
     constructorAlsoDeclareFields = false;
     emptySuperMethod = this.methodCall(null, 'super', null);
     overrideKeyword = '';
+    hasConvenienceMethodsToInsertUpdateOrDeleteFromDatabase = true;
+    lambdaMethodsMustCallReturn = true;
+    joinMethod: 'join';
+    staticKeyword = 'static';
 
     printPackage(_package: string) {
         return ``;
@@ -101,7 +106,7 @@ ${body}
         }).join(separator);
     }
 
-    fieldDeclaration(_visibility: string, name: string, _type: TypeDefinition, defaultValue: string): string {
+    fieldDeclaration(name: string, _type: TypeDefinition, defaultValue: string, _modifiers: Array<string>): string {
         let field = `get ${name}() {\n`;
         if (defaultValue) {
             field += `\t\t${this.returnDeclaration(defaultValue)}`;
@@ -110,7 +115,7 @@ ${body}
         return field;
     }
 
-    methodCall(caller: string, methodName: string, parameterValues: Array<string>): string {
+    methodCall(caller: PropertyDefinition, methodName: string, parameterValues: Array<string>): string {
         let callerString = '';
         if (caller) {
             callerString = `${caller}.`;
@@ -175,6 +180,10 @@ ${parameters.map((value) => {
         return this.ifStatement(`!${object}`, body);
     }
 
+    ifNotNullStatement(object: string, body: string): string {
+        return this.ifStatement(`${object}`, body);
+    }
+
     assignment(name1: string, name2: string): string {
         return `${name1} = ${name2};`;
     }
@@ -201,7 +210,7 @@ ${parameters.map((value) => {
         return '';
     }
 
-    equalMethod(var1: string, var2: string, negative: boolean): string {
+    equalMethod(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string {
         let equal = '===';
         if (negative) {
             equal = '!==';
@@ -209,7 +218,7 @@ ${parameters.map((value) => {
         return `${var1} ${equal} ${var2}`;
     }
 
-    simpleComparison(var1: string, var2: string, negative: boolean): string {
+    simpleComparison(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string {
         let equal = '==';
         if (negative) {
             equal = '!=';
@@ -217,12 +226,20 @@ ${parameters.map((value) => {
         return `${var1} ${equal} ${var2}`;
     }
 
-    arrayComparison(var1: string, var2: string, negative: boolean): string {
+    arrayComparison(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string {
         return this.equalMethod(var1, var2, negative);
     }
 
     cast(_obj: string, _type: TypeDefinition): string {
         return '';
+    }
+
+    callProperty(caller: PropertyDefinition, property: PropertyDefinition, insertNullable: boolean = false): string {
+        return `${this.printPropertyValue(caller, insertNullable)}.${this.printPropertyValue(property, insertNullable)}`;
+    }
+
+    printPropertyValue(property: PropertyDefinition, _insertNullable: boolean = false): string {
+        return `${property.name}`;
     }
 }
 

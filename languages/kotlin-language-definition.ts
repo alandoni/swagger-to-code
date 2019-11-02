@@ -5,7 +5,7 @@ import ConstructorDefinition from '../parser/definitions/constructor-definition'
 import PropertyDefinition from '../parser/definitions/property-definition';
 import Languages from './languages';
 
-class KotlinLanguageDefinition implements LanguageDefinition {
+class KotlinLanguageDefinition extends LanguageDefinition {
     name = Languages.KOTLIN;
     fileExtension = 'kt';
     useDataclassForModels = true;
@@ -16,6 +16,7 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     nullKeyword = 'null';
     anyTypeKeyword = 'Any';
     intKeyword = 'Int';
+    longKeyword = 'Long';
     numberKeyword = 'Double';
     stringKeyword = 'String';
     booleanKeyword = 'Boolean';
@@ -30,11 +31,15 @@ class KotlinLanguageDefinition implements LanguageDefinition {
     stringReplacement = '%s';
     equalMethodName = 'equals';
     hashCodeMethodName = 'hashCode';
-    varargsKeyword = 'varargs';
+    varargsKeyword = 'vararg';
     constructorAlsoDeclareFields = true;
     needDeclareFields = false;
     emptySuperMethod = this.methodCall(null, 'super', null);
     overrideKeyword = 'override';
+    hasConvenienceMethodsToInsertUpdateOrDeleteFromDatabase = true;
+    lambdaMethodsMustCallReturn = false;
+    joinMethod = 'joinToString';
+    staticKeyword = 'static';
 
     printPackage(packageString: string) {
         return `package ${packageString}`;
@@ -71,18 +76,27 @@ class KotlinLanguageDefinition implements LanguageDefinition {
         return `${classType} ${className}${constructor}${inherits} {\n\n${body}\n}`;
     }
 
+    private handleModifiers(modifiers: Array<string>) {
+        if (modifiers) {
+            const validModifiers = modifiers.filter((modifier) => {
+                return modifier !== this.staticKeyword;
+            });
+
+            if (validModifiers && validModifiers.length > 0) {
+                let modifiersString = validModifiers.join(' ');
+                modifiersString += ' ';
+                return modifiersString;
+            }
+        }
+        return '';
+    }
+
     methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, modifiers: Array<string>): string {
         let returnString = '';
         if (returnType && returnType.print(this) && returnType.print(this).length > 0) {
             returnString = ` : ${returnType.print(this)}`;
         }
-        let modifiersString = '';
-        if (modifiers) {
-            modifiersString = modifiers.join(' ');
-            modifiersString += ' ';
-        }
-
-        return `${modifiersString}fun ${methodName}(${this.printParametersNamesWithTypes(parameters, false)})${returnString} {
+        return `${this.handleModifiers(modifiers)}fun ${methodName}(${this.printParametersNamesWithTypes(parameters, false)})${returnString} {
 ${body}
 \t}`;
     }
@@ -115,7 +129,7 @@ ${body}
             nullable = '?';
         }
         let result = '';
-        if (type.subtype) {
+        if (type.subtype && !type.isEnum) {
             result = `${type.name}<${type.subtype.print(this)}>${nullable}`;
         } else {
             result =  `${type.name}${nullable}`;
@@ -140,22 +154,18 @@ ${body}
         }).join(separator);
     }
 
-    fieldDeclaration(visibility: string, name: string, type: TypeDefinition, defaultValue: string): string {
-        let visibilityString = '';
-        if (visibility.length > 0) {
-            visibilityString = `${visibility} `;
-        }
-        let field = `${visibilityString}val ${name} : ${type.print(this)}`;
+    fieldDeclaration(name: string, type: TypeDefinition, defaultValue: string, modifiers: Array<string>): string {
+        let field = `${this.handleModifiers(modifiers)}val ${name} : ${type.print(this)}`;
         if (defaultValue) {
             field += ` = ${defaultValue}`;
         }
         return field;
     }
 
-    methodCall(caller: string, methodName: string, parameterValues: Array<string>): string {
+    methodCall(caller: PropertyDefinition, methodName: string, parameterValues: Array<string>): string {
         let callerString = '';
         if (caller) {
-            callerString = `${caller}.`;
+            callerString = `${this.printPropertyValue(caller, true)}.`;
         }
         let shouldBreakLine = true;
         if (parameterValues && parameterValues.length < 3) {
@@ -182,7 +192,7 @@ ${body}
             shouldBreakLine = false;
         }
         const parameters = properties.map((property) => {
-            return ParameterDefinition.fromProperty(property, property.modifiers);
+            return ParameterDefinition.fromProperty(property);
         });
         return `(${this.printParametersNamesWithTypes(parameters, shouldBreakLine)})`;
     }
@@ -214,13 +224,21 @@ ${values.map((value) => {
     }
 
     lambdaMethod(caller: string, method: string, varName: string, body: string): string {
-        return `${caller}.${method} { (${varName}) ->
+        let name = '';
+        if (varName) {
+            name = ` ${varName} ->`
+        }
+        return `${caller}.${method} {${name}
 \t\t\t${body}
 \t\t}`;
     }
 
     ifNullStatement(object: string, body: string): string {
         return this.ifStatement(`${object} == ${this.nullKeyword}`, body);
+    }
+
+    ifNotNullStatement(object: string, body: string): string {
+        return this.ifStatement(`${object} != ${this.nullKeyword}`, body);
     }
 
     assignment(name1: string, name2: string): string {
@@ -232,6 +250,9 @@ ${values.map((value) => {
     }
 
     stringDeclaration(content: string): string {
+        if (content.indexOf('\n') > -1) {
+            return `"""${content}"""`;
+        }
         return `"${content}"`;
     }
 
@@ -253,29 +274,47 @@ ${values.map((value) => {
         return `${var1}::class ${equal} ${var2}::class`;
     }
 
-    equalMethod(var1: string, var2: string, negative: boolean): string {
+    equalMethod(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string {
         return this.simpleComparison(var1, var2, negative);
     }
 
-    simpleComparison(var1: string, var2: string, negative: boolean): string {
+    simpleComparison(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string {
         let equal = '==';
         if (negative) {
             equal = '!=';
         }
-        return `${var1} ${equal} ${var2}`;
+        return `${this.printPropertyValue(var1, false)} ${equal} ${this.printPropertyValue(var2, false)}`;
     }
 
-    arrayComparison(var1: string, var2: string, negative: boolean): string {
+    arrayComparison(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string {
         let equal = '';
         if (negative) {
             equal = '!';
         }
-        const callMethod = this.methodCall(var1, 'contentDeepEquals', [var2]);
+        const callMethod = this.methodCall(var1, 'contentDeepEquals', [`${var2.name}`]);
         return `${equal}${callMethod}`;
     }
 
     cast(obj: string, type: TypeDefinition): string {
         return `${obj} as ${type.print(this)}`;
+    }
+
+    companionObject(body: string) {
+        return `\tcompanion object {
+${body}
+\t}`;
+    }
+
+    callProperty(caller: PropertyDefinition, property: PropertyDefinition, insertNullable: boolean = false): string {
+        return `${this.printPropertyValue(caller, insertNullable)}.${property.name}`;
+    }
+
+    printPropertyValue(property: PropertyDefinition, insertNullable: boolean = false): string {
+        let nullable = '';
+        if (property.type.nullable && insertNullable) {
+            nullable = '?';
+        }
+        return `${property.name}${nullable}`;
     }
 }
 

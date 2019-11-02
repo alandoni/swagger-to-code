@@ -87,10 +87,10 @@ class LanguageParser {
     prepareReferences() {
         this.definitions.filter((definition) => {
             definition.properties.filter((property: DefinitionPropertyHelper) => {
-                const refersTo = property.type.subType && this.preparedDefinitions.get(property.type.subType.name);
+                const refersTo = property.type.subType && this.preparedDefinitions[property.type.subType.name];
                 return property.type.name === 'array' && refersTo && refersTo.needsTable;
             }).map((property: DefinitionPropertyHelper) => { // All properties that depends on array of other definition on database
-                const refersTo = this.preparedDefinitions.get(property.type.subType.name);
+                const refersTo = this.preparedDefinitions[property.type.subType.name];
                 property.setReference(refersTo);
 
                 const propertyReferringToDefinition = refersTo.properties.find((property: DefinitionPropertyHelper) => {
@@ -107,10 +107,10 @@ class LanguageParser {
             });
 
             definition.properties.filter((property: DefinitionPropertyHelper) => {
-                const refersTo = this.preparedDefinitions.get(property.type.name);
+                const refersTo = this.preparedDefinitions[property.type.name];
                 return refersTo;
             }).map((property: DefinitionPropertyHelper) => {  // All properties that depends on other definition on database
-                const refersTo = this.preparedDefinitions.get(property.type.name);
+                const refersTo = this.preparedDefinitions[property.type.name];
                 property.setReference(refersTo);
                 definition.addReference(new DefinitionReferenceHelper(refersTo, property, RelationshipType.ONE_TO_ONE));
             });
@@ -119,15 +119,15 @@ class LanguageParser {
 
     doesDefinitionUseFieldsAsPartOfTheTable(definition: DefinitionHelper): boolean {
         return definition.properties.filter((property) => {
-            return !ModelClassParser.getPropertyType(this.languageDefinition, property.type).isNative 
+            return !ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required).isNative 
                 || !LanguageParser.doesDefinitionNeedTable(definition);
         }).length > 0;
     }
 
     filterNonPropertiesFromDefinitionsReferringToNonExistingObjects(definition: DefinitionHelper): Array<DefinitionPropertyHelper> {
         return definition.properties.filter((property) => {
-            return !ModelClassParser.getPropertyType(this.languageDefinition, property.type).isNative &&
-                !(this.preparedDefinitions.get(property.type.name) && this.preparedDefinitions.get(property.type.name).needsTable)
+            return !ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required).isNative &&
+                !(this.preparedDefinitions[property.type.name] && this.preparedDefinitions[property.type.name].needsTable)
         });
     }
 

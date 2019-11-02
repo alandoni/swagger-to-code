@@ -14,11 +14,13 @@ export default class ModelClassParser implements Parser {
     languageDefinition: LanguageDefinition;
     definition: DefinitionHelper;
     configuration: ClassSettings;
+    thisKeyword: PropertyDefinition;
     
     constructor(languageDefinition: LanguageDefinition, definition: DefinitionHelper, configuration: ClassSettings) {
         this.languageDefinition = languageDefinition;
         this.definition = definition;
         this.configuration = configuration;
+        this.thisKeyword = new PropertyDefinition(this.languageDefinition.thisKeyword, new TypeDefinition(this.definition.name));
     }
 
     parse(): ClassDefinition {
@@ -73,7 +75,8 @@ export default class ModelClassParser implements Parser {
 
     parseConstructors(properties: Array<PropertyDefinition>): ConstructorDefinition {
         return new ConstructorDefinition(this.definition.name, properties.map((property) => {
-            return ParameterDefinition.fromProperty(property, [this.languageDefinition.constKeyword]);
+            property.modifiers.push(this.languageDefinition.constKeyword);
+            return ParameterDefinition.fromProperty(property);
         }));
     }
 
@@ -84,7 +87,7 @@ export default class ModelClassParser implements Parser {
             }
 
             const enumName = property.name.substr(0, 1).toUpperCase() + property.name.substr(1);
-            property.type = new DefinitionTypeHelper(enumName);
+            property.type = new DefinitionTypeHelper(enumName, new DefinitionTypeHelper(property.type.name), true);
             return new EnumDefinition(enumName, property.enum);
         }).filter((elements) => {
             return elements != null;
@@ -93,7 +96,9 @@ export default class ModelClassParser implements Parser {
 
     getCopyMethod(properties: Array<PropertyDefinition>): MethodDefinition {
         const values = properties.map((property) => {
-            return `${this.languageDefinition.thisKeyword}.${property.name}`;
+            return this.languageDefinition.callProperty(
+                new PropertyDefinition(this.languageDefinition.thisKeyword, new TypeDefinition(this.definition.name)),
+                property, false);
         });
         const constructObject = this.languageDefinition.constructObject(new TypeDefinition(this.definition.name), values);
         
@@ -121,19 +126,25 @@ export default class ModelClassParser implements Parser {
         }
 
         body += properties.map((property) => {
+            const type = new TypeDefinition(this.languageDefinition.stringKeyword);
+            const thisPropertyName = new PropertyDefinition(
+                this.languageDefinition.callProperty(this.thisKeyword, property, property.type.name === this.languageDefinition.arrayKeyword), 
+                property.type);
+            const object = new PropertyDefinition(objectName, new TypeDefinition(this.definition.name));
+            const objectPropertyName = new PropertyDefinition(this.languageDefinition.callProperty(object, property, false), type);
+
             switch (property.type.name) {
                 case this.languageDefinition.intKeyword:
                 case this.languageDefinition.numberKeyword:
                 case this.languageDefinition.booleanKeyword:
                     return `\t\t${this.languageDefinition.ifStatement(
-                        this.languageDefinition.simpleComparison(`${this.languageDefinition.thisKeyword}.${property.name}`, `${objectName}.${property.name}`, true), returnFalse)}`;
+                        this.languageDefinition.simpleComparison(thisPropertyName, objectPropertyName, true), returnFalse)}`;
                 case this.languageDefinition.arrayKeyword:
-                    return `\t\t${this.languageDefinition.ifStatement(
-                        this.languageDefinition.arrayComparison(`${this.languageDefinition.thisKeyword}.${property.name}`, `${objectName}.${property.name}`, true), returnFalse)}`;
+                    return this.arrayComparison(thisPropertyName, objectPropertyName, returnFalse);
                 case this.languageDefinition.arrayKeyword:
                 default:
                     return `\t\t${this.languageDefinition.ifStatement(
-                        this.languageDefinition.equalMethod(`${this.languageDefinition.thisKeyword}.${property.name}`, `${objectName}.${property.name}`, true), returnFalse)}`;
+                        this.languageDefinition.equalMethod(thisPropertyName, objectPropertyName, true), returnFalse)}`;
             }
         }).join('\n');
 
@@ -146,8 +157,22 @@ export default class ModelClassParser implements Parser {
             [this.languageDefinition.overrideKeyword]);
     }
 
+    private arrayComparison(thisPropertyName: PropertyDefinition, objectPropertyName: PropertyDefinition, returnFalse: string): string {
+        let var1 = new PropertyDefinition(this.languageDefinition.arrayComparison(thisPropertyName, objectPropertyName, false), new TypeDefinition(this.languageDefinition.booleanKeyword));
+        const var2 = new PropertyDefinition(this.languageDefinition.falseKeyword, new TypeDefinition(this.languageDefinition.booleanKeyword));
+
+        if (thisPropertyName.type.nullable) {
+            objectPropertyName.name += '!!';
+            var1 = new PropertyDefinition(this.languageDefinition.arrayComparison(thisPropertyName, objectPropertyName, false), new TypeDefinition(this.languageDefinition.booleanKeyword));
+            return `\t\t${this.languageDefinition.ifStatement(this.languageDefinition.simpleComparison(var1, var2, false), returnFalse)}`;
+        } else {
+            return `\t\t${this.languageDefinition.ifStatement(this.languageDefinition.arrayComparison(thisPropertyName, objectPropertyName, true), returnFalse)}`;
+        }
+    }
+
     getHashCodeMethod(properties: Array<PropertyDefinition>): MethodDefinition {
-        const result = this.languageDefinition.methodCall('Objects', 'hash', properties.map((property) => {
+        const caller = new PropertyDefinition('Objects', new TypeDefinition('Objects'));
+        const result = this.languageDefinition.methodCall(caller, 'hash', properties.map((property) => {
             return property.name;
         }));
 
@@ -163,36 +188,36 @@ export default class ModelClassParser implements Parser {
 
     parseProperties(): Array<PropertyDefinition> {
         return this.definition.properties.map((property) => {
-            const propertyType = ModelClassParser.getPropertyType(this.languageDefinition, property.type);
-            return new PropertyDefinition(property.name, propertyType, property.default, property.required);
+            const propertyType = ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required);
+            return new PropertyDefinition(property.name, propertyType, property.default);
         });
     }
 
-    static getPropertyType(languageDefinition: LanguageDefinition, type: DefinitionTypeHelper): TypeDefinition {
+    static getPropertyType(languageDefinition: LanguageDefinition, type: DefinitionTypeHelper, required: boolean): TypeDefinition {
         let isEnum = false;
         if (type.isEnum) {
             isEnum = true;
         }
 
         if (type.name === 'string') {
-            return new TypeDefinition(languageDefinition.stringKeyword, true, null, isEnum);
+            return new TypeDefinition(languageDefinition.stringKeyword, true, null, isEnum, !required);
         }
         if (type.name === 'number') {
-            return new TypeDefinition(languageDefinition.numberKeyword, true, null, isEnum);
+            return new TypeDefinition(languageDefinition.numberKeyword, true, null, isEnum, !required);
         }
         if (type.name === 'integer') {
-            return new TypeDefinition(languageDefinition.intKeyword, true, null, isEnum);
+            return new TypeDefinition(languageDefinition.intKeyword, true, null, isEnum, !required);
         }
         if (type.name === 'boolean') {
-            return new TypeDefinition(languageDefinition.booleanKeyword, true, null, isEnum);
+            return new TypeDefinition(languageDefinition.booleanKeyword, true, null, isEnum, !required);
         }
         if (type.name === 'array') {
-            return new TypeDefinition(languageDefinition.arrayKeyword, true, this.getPropertyType(languageDefinition, type.subType), isEnum);
+            return new TypeDefinition(languageDefinition.arrayKeyword, true, this.getPropertyType(languageDefinition, type.subType, true), isEnum, !required);
         }
         if (type.name === 'object') {
-            return new TypeDefinition(languageDefinition.mapKeyword, false, null, isEnum);
+            return new TypeDefinition(languageDefinition.mapKeyword, false, null, isEnum, !required);
         }
 
-        return new TypeDefinition(type.name, false, null, isEnum);
+        return new TypeDefinition(type.name, false, type.subType ? this.getPropertyType(languageDefinition, type.subType, required) : null, isEnum, !required);
     }
 }

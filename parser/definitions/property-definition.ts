@@ -6,28 +6,21 @@ class PropertyDefinition implements PrintableLanguageElements {
     name: string;
     type: TypeDefinition;
     value: string;
-    required: boolean;
-    isPrivate: boolean;
     modifiers: Array<string>;
 
-    constructor(name: string, type: TypeDefinition, value: string, required: boolean = false, isPrivate: boolean = false) {
+    constructor(name: string, type: TypeDefinition, value: string = null, modifiers: Array<string> = []) {
         this.name = name;
         this.type = type;
         this.value = value;
-        this.required = required;
-        this.isPrivate = isPrivate;
+        this.modifiers = modifiers;
     }
 
     print(languageDefinition: LanguageDefinition) {
-        let visibility = languageDefinition.publicKeyword;
-        if (this.isPrivate) {
-            visibility = languageDefinition.privateKeyword;
-        }
         return languageDefinition.fieldDeclaration(
-            visibility, 
             this.name, 
             this.type,
-            this.value);
+            this.value,
+            this.modifiers);
     }
 }
 

@@ -10,32 +10,40 @@ import ClassDefinition from "./definitions/class-definition";
 import MethodDefinition from "./definitions/method-definition";
 import Parser from "./parser-interface";
 import { LanguageSettings, TypeOfClass } from "../configuration";
+import Languages from "../languages/languages";
+import KotlinClassDefinition from "./definitions/kotlin-class-definition";
 
 export default class DatabaseTableSchemaClassParser implements Parser {
     static STRING_TO_ARRAY_SEPARATOR = ';';
     static classSufix = 'TableSchema';
     static tableNameProperty = 'TABLE_NAME';
     static databaseObject = new ParameterDefinition('db', new TypeDefinition('SQLiteDatabase'));
+    static cursor = new PropertyDefinition('cursor', new TypeDefinition('Cursor'));
 
     languageDefinition: LanguageDefinition;
     databaseLanguageDefinition: SqliteLanguageDefinition;
     definition: DefinitionHelper;
     configuration: LanguageSettings;
+    className: PropertyDefinition;
+
+    thisKeyword: PropertyDefinition;
 
     constructor(languageDefinition: LanguageDefinition, databaseLanguageDefinition: SqliteLanguageDefinition, definition: DefinitionHelper, configuration: LanguageSettings) {
         this.languageDefinition = languageDefinition;
         this.databaseLanguageDefinition = databaseLanguageDefinition;
         this.definition = definition;
         this.configuration = configuration;
+        this.thisKeyword = new PropertyDefinition(this.languageDefinition.thisKeyword, new TypeDefinition(this.definition.name));
     }
 
     parse(): ClassDefinition {
         const nativeDependencies = [
             'android.database.sqlite.SQLiteDatabase',
             'android.database.Cursor',
+            'android.content.ContentValues',
         ];
         const className = this.definition.name;
-        const tableClassName = `${className}${DatabaseTableSchemaClassParser.classSufix}`;
+        this.className = new PropertyDefinition(`${className}${DatabaseTableSchemaClassParser.classSufix}`, new TypeDefinition(this.definition.name));
 
         const fields = this.parseProperties();
         
@@ -53,6 +61,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
 
         const dependencies = [
             ...nativeDependencies, 
+            `${this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES).package}.${this.definition.name}`,
             ...parseDependencies,
             inherits ? inherits.package : null,
             ...implementsInterfaces.map((interfaceType) => {
@@ -74,8 +83,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             DatabaseTableSchemaClassParser.tableNameProperty,
             new TypeDefinition(this.languageDefinition.stringKeyword),
             this.languageDefinition.stringDeclaration(StringUtils.splitNameWithUnderlines(className).toLowerCase()),
-            null,
-            false);
+            [this.languageDefinition.staticKeyword]);
 
         const methods = [
             this.createCreateTableMethod(fields),
@@ -83,8 +91,8 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             this.createInsertOrUpdateMethod(fields),
             this.createBatchInsertOrUpdateMethod(),
             this.createDeleteMethod(),
-            this.createReadListFromDbMethod(),
-            this.createSelectMethod(),
+            this.createReadListFromDbMethod(fields),
+            this.createSelectMethod(fields),
             this.createSelectAllMethod(),
             this.createSelectByIdMethod(),
             ...this.createMethodsBasedOnDependencies(fields),
@@ -94,7 +102,14 @@ export default class DatabaseTableSchemaClassParser implements Parser {
 
         const packageString = classSettings.package;
 
-        const tableClass = new ClassDefinition(packageString, tableClassName, properties, null, methods, null, dependencies);
+        let tableClass = null;
+        
+        if (this.languageDefinition.name === Languages.KOTLIN) {
+            tableClass = new KotlinClassDefinition(packageString, this.className.name, properties, null, methods, null, dependencies);
+        } else {
+            tableClass = new ClassDefinition(packageString, this.className.name, properties, null, methods, null, dependencies);
+        }
+
         tableClass.inheritsFrom = inherits;
         tableClass.implements = implementsInterfaces;
         return tableClass;
@@ -102,7 +117,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
 
     getAllProperties(tableNameString: PropertyDefinition, fields: Array<DatabaseFieldHelper>): Array<PropertyDefinition> {
         const properties = [tableNameString, ...fields.filter((field) => {
-            return !field.fromClass;
+            return !field.fromClass && field.fieldName;
         }).map((field) => {
             return field.toProperty();
         })];
@@ -121,14 +136,14 @@ export default class DatabaseTableSchemaClassParser implements Parser {
         let fields = this.definition.properties.map((property) => {
             let subObject = null;
             const subProperties = property.subProperties;
-            if (subProperties ) {
+            if (subProperties) {
                 const propertiesFromClass = subProperties.map((subProperty) => {
                     const prefix = property.name;
                     subObject = new DatabaseFieldHelper(
                         this.databaseLanguageDefinition,
                         this.languageDefinition,
                         subProperty.name,
-                        ModelClassParser.getPropertyType(this.languageDefinition, subProperty.type),
+                        ModelClassParser.getPropertyType(this.languageDefinition, subProperty.type, subProperty.required),
                         subProperty.required, null);
                     subObject.fieldName = `${prefix.toUpperCase()}_${subObject.fieldName}`;
                     subObject.databaseFieldName = `${prefix}_${subObject.databaseFieldName}`;
@@ -139,14 +154,14 @@ export default class DatabaseTableSchemaClassParser implements Parser {
                 return new DatabaseFieldHelper(this.databaseLanguageDefinition,
                     this.languageDefinition,
                     property.name,
-                    ModelClassParser.getPropertyType(this.languageDefinition, property.type),
+                    ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required),
                     property.required,
                     propertiesFromClass);
             }
 
             return new DatabaseFieldHelper(this.databaseLanguageDefinition, this.languageDefinition,
                 property.name,
-                ModelClassParser.getPropertyType(this.languageDefinition, property.type),
+                ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required),
                 property.required,
                 subObject);
         });
@@ -183,17 +198,20 @@ export default class DatabaseTableSchemaClassParser implements Parser {
         }).join(',\n');
 
         const parameters = typedFields.map((field) => {
-            return `\t\t${this.languageDefinition.thisKeyword}.${field.fieldName}`;
+            const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
+            return `\t\t${this.languageDefinition.callProperty(this.className, fieldName, false)}`;
         });
 
-        const tablePlusParameters = [`${this.languageDefinition.thisKeyword}.TABLE_NAME`, ...parameters];
+        const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const propertyCall = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const tablePlusParameters = [propertyCall, ...parameters];
         
         const tableString = this.languageDefinition.stringDeclaration(`${this.databaseLanguageDefinition.createTable} \`${this.languageDefinition.stringReplacement}\` (
-    ${databaseFields}
+${databaseFields}
 \t\t\t)`);
-        const methodCall = `${this.languageDefinition.methodCall(tableString, 'format', tablePlusParameters)}`;
+        const methodCall = `${this.languageDefinition.methodCall(new PropertyDefinition(tableString, new TypeDefinition(this.languageDefinition.stringKeyword)), 'format', tablePlusParameters)}`;
         
-        let methodString = `\t\t${this.languageDefinition.methodCall('db', 'execSQL', [methodCall])};`;
+        let methodString = `\t\t${this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'execSQL', [methodCall])};`;
 
         return new MethodDefinition('createTable',
             null,
@@ -211,6 +229,42 @@ export default class DatabaseTableSchemaClassParser implements Parser {
         return className.substr(0, 1).toUpperCase() + className.substr(1);
     }
 
+    readFromDatabaseAccordingToFieldType(className: string, field: DatabaseFieldHelper) {
+        const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const columnName = new PropertyDefinition(this.languageDefinition.callProperty(this.className, fieldName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+        const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName.name]);
+
+        switch(field.databaseType.name) {
+            case this.databaseLanguageDefinition.numberKeyword:
+                return this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getDouble', [methodGetIndexOfColumn]);
+            case this.databaseLanguageDefinition.stringKeyword:
+                const method = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]);
+                if (field.type.isEnum) {
+                    const classNameProperty = new PropertyDefinition(className, new TypeDefinition(className));
+                    const fieldType = new PropertyDefinition(field.type.name, new TypeDefinition(this.languageDefinition.stringKeyword));
+                    const caller = new PropertyDefinition(this.languageDefinition.callProperty(classNameProperty, fieldType, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+                    return this.languageDefinition.methodCall(caller, 'valueOf', [method]);
+                }
+                return method;
+
+            case this.databaseLanguageDefinition.integerKeyword:
+            case this.databaseLanguageDefinition.booleanKeyword:
+                if (field.type.name === this.languageDefinition.booleanKeyword) {
+                    const variable = new PropertyDefinition(this.languageDefinition.methodCall(
+                        DatabaseTableSchemaClassParser.cursor, 'getInt', [methodGetIndexOfColumn]), 
+                        new TypeDefinition(this.languageDefinition.stringKeyword));
+                    return this.languageDefinition.simpleComparison(
+                        variable,
+                        new PropertyDefinition('1', new TypeDefinition(this.languageDefinition.stringKeyword)),
+                        false);
+                }
+                return this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getInt',  [methodGetIndexOfColumn]);
+            default:
+                // throw new Error(`QUE? ${JSON.stringify(field)}`);
+                return null;
+        }
+    }
+
     createReadFromDbMethod(fields: Array<DatabaseFieldHelper>) {
         const className = this.definition.name;
         const varName = this.classNameToVar(className);
@@ -220,17 +274,8 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             if (nonNative) {
                 return nonNative;
             }
-            switch(field.databaseType.name) {
-                case this.databaseLanguageDefinition.numberKeyword:
-                    return `${this.languageDefinition.methodCall('cursor', 'getDouble', [`${this.languageDefinition.thisKeyword}.${field.fieldName}`])}`;
-                case this.databaseLanguageDefinition.stringKeyword:
-                    return `${this.languageDefinition.methodCall('cursor', 'getString',  [`${this.languageDefinition.thisKeyword}.${field.fieldName}`])}`;
-                case this.databaseLanguageDefinition.integerKeyword:
-                    return `${this.languageDefinition.methodCall('cursor', 'getInt',  [`${this.languageDefinition.thisKeyword}.${field.fieldName}`])}`;
-                default:
-                   // throw new Error(`QUE? ${JSON.stringify(field)}`);
-                   return null;
-            }
+
+            return this.readFromDatabaseAccordingToFieldType(className, field);
         });
 
         let methodString = `\t\t${this.languageDefinition.variableDeclaration(this.languageDefinition.constKeyword, 
@@ -239,49 +284,155 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             this.languageDefinition.constructObject(new TypeDefinition(className), parameters))}`;
         methodString += `\n\t\t${this.languageDefinition.returnDeclaration(varName)}`;
 
+        const parametersOfMethod: Array<ParameterDefinition> = [];
+        if (this.isReferencingOtherTables(fields)) {
+            parametersOfMethod.push(DatabaseTableSchemaClassParser.databaseObject);
+        }
+        parametersOfMethod.push(ParameterDefinition.fromProperty(DatabaseTableSchemaClassParser.cursor));
+
         return new MethodDefinition('readFromDb', 
             new TypeDefinition(className),
-            [   
-                new ParameterDefinition('cursor', new TypeDefinition('Cursor')),
-            ],
+            parametersOfMethod,
             methodString);
+    }
+
+    isReferencingOtherTables(fields: Array<DatabaseFieldHelper>) {
+        return fields.filter((field) => {
+            return field.searchByDependencyId || field.searchById;
+        }).length > 0;
     }
 
     handleNonNativeTypes(field: DatabaseFieldHelper) {
         const className = this.definition.name;
         if (field.fromClass) {
             const params = field.fromClass.map((field) => {
-                return this.languageDefinition.methodCall('cursor', 'getInt', [`${this.languageDefinition.thisKeyword}.${field.fieldName}`]);
+                return this.readFromDatabaseAccordingToFieldType(className, field);
             });
 
             return this.languageDefinition.constructObject(field.type, params);
         }
+        const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const columnName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName]);
         if (field.searchByDependencyId) {
-            const constructObject = this.languageDefinition.constructObject(new TypeDefinition(`${field.type.name}${DatabaseTableSchemaClassParser.classSufix}`), null);
-            let getId = this.languageDefinition.methodCall('cursor', 'getInt', [`${this.languageDefinition.thisKeyword}.${field.fieldName}`]);
+            const constructObject = new PropertyDefinition(
+                this.languageDefinition.constructObject(new TypeDefinition(`${field.type.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
+                new TypeDefinition(this.definition.name)
+            );
+            let getId = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]);
             return `${this.languageDefinition.methodCall(
                 constructObject, 
-                `selectById`, [getId])}`;
+                `selectById`, ['db', getId])}`;
         }
         if (field.searchById) {
-            const constructObject = this.languageDefinition.constructObject(new TypeDefinition(`${className}${DatabaseTableSchemaClassParser.classSufix}`), null);
-            let getId = this.languageDefinition.methodCall('cursor', 'getInt', [`${this.languageDefinition.thisKeyword}.${field.fieldName}`]);
+            const constructObject = new PropertyDefinition(this.languageDefinition.constructObject(
+                new TypeDefinition(`${field.type.subtype.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
+                new TypeDefinition(this.definition.name));
+
+            const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
+            const columnName = this.languageDefinition.callProperty(this.className, fieldName, false);
+
+            const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName]);
+            let getId = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]);
             return `${this.languageDefinition.methodCall(
                 constructObject, 
-                `selectBy${className}Id`, [getId])}`;
+                `selectBy${className}Id`, ['db', getId])}`;
         }
         if (field.isArrayOfString) {
-            const callCursorGetStringMethod = this.languageDefinition.methodCall('cursor', 'getString', 
-                [`${this.languageDefinition.thisKeyword}.${field.fieldName}`]);
-            return `${this.languageDefinition.methodCall(
+            const callCursorGetStringMethod = new PropertyDefinition(
+                this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]), 
+                new TypeDefinition(this.languageDefinition.stringKeyword));
+                
+            const splitMethod = new PropertyDefinition(this.languageDefinition.methodCall(
                 callCursorGetStringMethod, 
                 'split', [this.languageDefinition.stringDeclaration(DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR)]
-            )}`;
+            ), new TypeDefinition(this.languageDefinition.stringKeyword));
+            return this.languageDefinition.methodCall(splitMethod, 'toTypedArray', null);
         }
         return null;
     }
 
+    createInsertOrUpdateMethodWithConvenienceMethod(fields: Array<DatabaseFieldHelper>) {
+        const className = this.definition.name;
+
+        const objectName = this.classNameToVar(className);
+
+        const { onlyNativeTypes, nonNativeTypes } = this.getFieldsSeparatedByNative(fields)
+        
+        const values = new PropertyDefinition('values', new TypeDefinition('ContentValues'));
+        const valuesVariable = this.languageDefinition.variableDeclaration(
+            this.languageDefinition.constKeyword, 
+            values.type, 
+            values.name, 
+            this.languageDefinition.constructObject(values.type, null));
+
+        const onlyNativeTypesNames = onlyNativeTypes.map((field: DatabaseFieldHelper) => {
+            let name = '';
+            let propertyName = field.propertyName;
+            if (field.fromClass) {
+                propertyName = `${field.fromClass}.${propertyName}`;
+            }
+            if (field.type.isEnum) {
+                name = '.name';
+                if (field.type.nullable) {
+                    name = `!!${name}`;
+                }
+            } else if (!field.type.isNative && field.searchByDependencyId) {
+                if (field.type.nullable) {
+                    propertyName += '?';
+                }
+                propertyName += '.id';
+            } else if (field.isArrayOfString) {
+                if (field.type.nullable) {
+                    propertyName = `${propertyName}!!`;
+                }
+
+                propertyName = this.languageDefinition.methodCall(
+                    new PropertyDefinition(propertyName, new TypeDefinition(this.languageDefinition.stringKeyword)),
+                    this.languageDefinition.joinMethod, 
+                    [this.languageDefinition.stringDeclaration(`${DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR}`)]);
+            }
+            const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
+            const method = this.languageDefinition.methodCall(
+                values, 
+                'put', 
+                [
+                    this.languageDefinition.callProperty(this.className, fieldName, false), 
+                    `${objectName}.${propertyName}${name}`
+                ]);
+
+            if (field.type.nullable && (field.isArrayOfString || field.type.isEnum)) {
+                return `\t\t${this.languageDefinition.ifNotNullStatement(`${objectName}.${field.propertyName}`, method)}`;
+            } else {
+                return `\t\t${method}`;
+            }
+        }).join('\n');
+
+        const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const callExecSqlMethod = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'insertWithOnConflict', [ tableName, this.languageDefinition.nullKeyword, 'values', 'SQLiteDatabase.CONFLICT_REPLACE']);
+        let methodString = `\t\t${valuesVariable}\n`;
+        methodString += `${onlyNativeTypesNames}\n`;
+
+        if (nonNativeTypes.length > 0) {
+            methodString += `\n${this.getInsertMethodForNonNativeTypes(nonNativeTypes, objectName)}\n\n`;
+        }
+
+        methodString += `\t\t${this.languageDefinition.returnDeclaration(callExecSqlMethod)}`;
+
+        return new MethodDefinition('insertOrUpdate',
+            new TypeDefinition(this.languageDefinition.longKeyword),
+            [
+                DatabaseTableSchemaClassParser.databaseObject,
+                new ParameterDefinition(objectName, new TypeDefinition(`${className}`))
+            ],
+            methodString);
+    }
+
     createInsertOrUpdateMethod(fields: Array<DatabaseFieldHelper>) {
+        if (this.languageDefinition.hasConvenienceMethodsToInsertUpdateOrDeleteFromDatabase) {
+            return this.createInsertOrUpdateMethodWithConvenienceMethod(fields);
+        }
         const className = this.definition.name;
         const interrogations: Array<string> = [];
         const stringReplacements: Array<string> = [];
@@ -299,15 +450,16 @@ export default class DatabaseTableSchemaClassParser implements Parser {
 
         const sql = `${this.languageDefinition.stringDeclaration(
             `${this.databaseLanguageDefinition.insertOrUpdateKeyword} \`${this.languageDefinition.stringReplacement}\` (${stringReplacements.join(', ')}) ${this.databaseLanguageDefinition.valuesKeyword} (${interrogations.join(', ')})`)}`;
+        const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
         
-        const statement = `${this.languageDefinition.methodCall(sql, 'format', this.getFields(onlyNativeTypes, objectName))}`;
+        const statement = `${this.languageDefinition.methodCall(sqlStringVariable, 'format', this.getFields(onlyNativeTypes, objectName))}`;
         
-        const callExecSqlMethod = this.languageDefinition.methodCall('db', 'execSQL', [statement]);
+        const callExecSqlMethod = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'execSQL', [statement]);
 
         let methodString = `\t\t${this.languageDefinition.returnDeclaration(callExecSqlMethod)}`;
 
         if (nonNativeTypes.length > 0) {
-            methodString = this.getInsertMethodForNonNativeTypes(nonNativeTypes, objectName, methodString, statement);
+            methodString += `\n${this.getInsertMethodForNonNativeTypes(nonNativeTypes, objectName)}`;
         }
 
         return new MethodDefinition('insertOrUpdate',
@@ -319,29 +471,29 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             methodString);
     }
 
-    getInsertMethodForNonNativeTypes(nonNativeTypes: Array<DatabaseFieldHelper>, objectName: string, methodString: string, statement: string) {
-        const methods = nonNativeTypes.filter((property) => {
+    getInsertMethodForNonNativeTypes(nonNativeTypes: Array<DatabaseFieldHelper>, objectName: string) {
+        return nonNativeTypes.filter((property) => {
             return property.type.subtype != null;
         }).map((property) => {
             let methodName = 'insertOrUpdate';
             if (property.type.name.indexOf(this.languageDefinition.arrayKeyword) > -1) {
                 methodName = 'batchInsertOrUpdate';
             }
-            const constructObject = this.languageDefinition.constructObject(new TypeDefinition(`${property.type.subtype.name}${DatabaseTableSchemaClassParser.classSufix}`), []);
-            return `\t\t${this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}`])}`;
+
+            const constructObject = new PropertyDefinition(
+                this.languageDefinition.constructObject(
+                    new TypeDefinition(`${property.type.subtype.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
+                new TypeDefinition(this.definition.name)
+            );
+
+            const callMethod = this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}`]);
+            if (property.type.nullable) {
+                const callMethod = this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}!!`]);
+                return `\t\t${this.languageDefinition.ifNotNullStatement(`${objectName}.${property.propertyName}`, callMethod)}`;
+            } else {
+                return `\t\t${callMethod}`;
+            }
         }).join('\n');
-
-        const callExecSqlMethod = this.languageDefinition.methodCall('db', 'execSQL', [statement]);
-        methodString = `\t\t${this.languageDefinition.variableDeclaration(
-            this.languageDefinition.constKeyword, 
-            new TypeDefinition(this.languageDefinition.intKeyword), 
-            'result',
-            callExecSqlMethod)}
-
-${methods}
-
-\t\t${this.languageDefinition.returnDeclaration('result')}`;
-        return methodString;
     }
 
     getFieldsSeparatedByNative(fields: Array<DatabaseFieldHelper>): any {
@@ -376,18 +528,21 @@ ${methods}
     }
 
     getFields(properties: Array<DatabaseFieldHelper>, objectName: string) {
-        let fields = [`${this.languageDefinition.thisKeyword}.TABLE_NAME`];
+        let fields = [`${this.className}.${DatabaseTableSchemaClassParser.tableNameProperty}`];
         fields = fields.concat(properties.filter((property) => {
             return property.databaseFieldName !== 'id';
         }).map((property) => {
-            return `${this.languageDefinition.thisKeyword}.${property.fieldName}`;
+            return `${this.thisKeyword}.${property.fieldName}`;
         }));
         
         fields = fields.concat(properties.filter((property) => {
             return property.databaseFieldName !== 'id';
         }).map((property) => {
             if (property.isArrayOfString) {
-                return `${this.languageDefinition.methodCall(`${objectName}.${property.propertyName}`, 'join', 
+                const caller = new PropertyDefinition(objectName, new TypeDefinition(this.languageDefinition.stringKeyword));
+                const propertyName = new PropertyDefinition(property.propertyName, new TypeDefinition(this.languageDefinition.stringKeyword));
+                const callProperty = new PropertyDefinition(this.languageDefinition.callProperty(caller, propertyName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+                return `${this.languageDefinition.methodCall(callProperty, 'join', 
                     [this.languageDefinition.stringDeclaration(DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR)])}`;
             }
             if (property.fromClass) {
@@ -403,15 +558,22 @@ ${methods}
 
     createBatchInsertOrUpdateMethod() {
         const className = this.definition.name;
-        const objectName = this.classNameToVar(className);
+        const objectName = `${this.classNameToVar(className)}Array`;
 
-        const callInsertOrUpdateMethod = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'insertOrUpdate', ['db', objectName]);
-        let mapBodyString = `\t\t${this.languageDefinition.returnDeclaration(callInsertOrUpdateMethod)}`;
+        const callInsertOrUpdateMethod = this.languageDefinition.methodCall(this.thisKeyword, 'insertOrUpdate', ['db', objectName]);
+
+        let mapBodyString = callInsertOrUpdateMethod;
+        if (this.languageDefinition.lambdaMethodsMustCallReturn) {
+            mapBodyString = `${this.languageDefinition.returnDeclaration(callInsertOrUpdateMethod)}`;
+        }
+
         const callMapMethod = this.languageDefinition.lambdaMethod(objectName, 'map', objectName, mapBodyString);
-        let methodString = `\t\t${this.languageDefinition.returnDeclaration(callMapMethod)}`;
+        const mapMethodProperty = new PropertyDefinition(callMapMethod, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const convertMap = this.languageDefinition.methodCall(mapMethodProperty, 'toTypedArray', null);
+        const methodString = `\t\t${this.languageDefinition.returnDeclaration(convertMap)}`;
 
         return new MethodDefinition('batchInsertOrUpdate',
-            new TypeDefinition(this.languageDefinition.arrayKeyword, true, new TypeDefinition(this.languageDefinition.intKeyword)),
+            new TypeDefinition(this.languageDefinition.arrayKeyword, true, new TypeDefinition(this.languageDefinition.longKeyword)),
             [
                 DatabaseTableSchemaClassParser.databaseObject, 
                 new ParameterDefinition(objectName, new TypeDefinition(this.languageDefinition.arrayKeyword, true, new TypeDefinition(className))),
@@ -419,15 +581,36 @@ ${methods}
             methodString);
     }
 
+    createDeleteMethodWithConvenienceMethod() {
+        const id = new PropertyDefinition('id', new TypeDefinition(this.languageDefinition.stringKeyword))
+        const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        
+        const dbExecCall = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'delete', 
+            [tableName, this.languageDefinition.stringDeclaration(`${this.className}.ID_FIELD = ?`), 
+            this.languageDefinition.methodCall(null, 'arrayOf', [this.languageDefinition.methodCall(id, 'toString', null)])]);
+        const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
+        return new MethodDefinition('deleteById',
+            new TypeDefinition(this.languageDefinition.intKeyword),
+            [
+                DatabaseTableSchemaClassParser.databaseObject, 
+                ParameterDefinition.fromProperty(id),
+            ],
+            returnCall);
+    }
+
     createDeleteMethod() {
+        if (this.languageDefinition.hasConvenienceMethodsToInsertUpdateOrDeleteFromDatabase) {
+            return this.createDeleteMethodWithConvenienceMethod();
+        }
         const sql = this.languageDefinition.stringDeclaration(
             `${this.databaseLanguageDefinition.deleteKeyword} ${this.languageDefinition.stringReplacement} ${this.databaseLanguageDefinition.whereKeyword} ${this.languageDefinition.stringReplacement} = ${this.databaseLanguageDefinition.parameterKeyword}`
         );
+        const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', 
+            [`${this.className}.${DatabaseTableSchemaClassParser.tableNameProperty}`, `${this.className}.ID_FIELD`]);
 
-        const formatMethodCall = this.languageDefinition.methodCall(sql, 'format', 
-            [`${this.languageDefinition.thisKeyword}.TABLE_NAME`, `${this.languageDefinition.thisKeyword}.ID_FIELD`]);
-
-        const dbExecCall = this.languageDefinition.methodCall('db', 'execSQL', [formatMethodCall, 'id']);
+        const dbExecCall = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'execSQL', [formatMethodCall, 'id']);
         const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
         return new MethodDefinition('deleteById',
             new TypeDefinition(this.languageDefinition.intKeyword),
@@ -438,27 +621,37 @@ ${methods}
             returnCall);
     }
 
-    createReadListFromDbMethod() {
+    createReadListFromDbMethod(fields: Array<DatabaseFieldHelper>) {
         const listDeclaration = this.createListObject();
 
-        const cursorMoveToNext = this.languageDefinition.methodCall('cursor', 'moveToNext', null);
-        const readFromDbMethodCall = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'readFromDb', ['cursor']);
-        const whileBody = `\t\t${this.languageDefinition.methodCall('list', 'add', [readFromDbMethodCall])}`;
+        const params = [];
+        const paramsOfMethod = [];
+        if (this.isReferencingOtherTables(fields)) {
+            paramsOfMethod.push(DatabaseTableSchemaClassParser.databaseObject);
+            params.push(DatabaseTableSchemaClassParser.databaseObject.name);
+        }
+        params.push('cursor');
+        paramsOfMethod.push(ParameterDefinition.fromProperty(DatabaseTableSchemaClassParser.cursor));
+
+        const cursorMoveToNext = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'moveToNext', null);
+        const readFromDbMethodCall = this.languageDefinition.methodCall(this.thisKeyword, 'readFromDb', params);
+
+        const list = new PropertyDefinition('list', new TypeDefinition(this.languageDefinition.arrayListKeyword, false, new TypeDefinition(this.definition.name)),);
+
+        const whileBody = `\t\t${this.languageDefinition.methodCall(list, 'add', [readFromDbMethodCall])}`;
         const whileStatement = this.languageDefinition.whileStatement(cursorMoveToNext, whileBody);
-        const returnCall = `${this.languageDefinition.returnDeclaration('list')}`;
+        const returnCall = `${this.languageDefinition.returnDeclaration(this.languageDefinition.methodCall(list, 'toTypedArray', null))}`;
 
         const methodBody = `\t\t${listDeclaration}
 \t\t${whileStatement}
 \t\t${returnCall}`
         return new MethodDefinition('readListFromDb', 
-            new TypeDefinition(this.languageDefinition.intKeyword),
-            [
-                new ParameterDefinition('cursor', new TypeDefinition('Cursor')),
-            ],
+            new TypeDefinition(this.languageDefinition.arrayKeyword, false, new TypeDefinition(this.definition.name)),
+            paramsOfMethod,
             methodBody);
     }
 
-    createListObject() {
+    createListObject(): string {
         let listConstruct = this.languageDefinition.arrayListKeyword;
         if (this.languageDefinition.shouldConstructList) {
             listConstruct = this.languageDefinition.constructObject(new TypeDefinition(this.languageDefinition.arrayListKeyword), null);
@@ -471,32 +664,51 @@ ${methods}
         return listDeclaration;
     }
 
-    createSelectMethod() {
+    createSelectMethod(fields: Array<DatabaseFieldHelper>) {
         const cursorDeclaration = this.languageDefinition.variableDeclaration(
             this.languageDefinition.variableKeyword,
-            new TypeDefinition('Cursor'),
-            'cursor', 
-            null);
-        const listDeclaration = this.createListObject();
+            new TypeDefinition(DatabaseTableSchemaClassParser.cursor.type.name, false, null, false, true),
+            DatabaseTableSchemaClassParser.cursor.name,
+            this.languageDefinition.nullKeyword);
 
-        const dbExecCall = this.languageDefinition.methodCall('db', 'rawQuery', ['sql', 'args']);
-        const assignRawQueryToCursor = this.languageDefinition.assignment('cursor', dbExecCall);
-        const callReadListFromDbMethod = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'readListFromDb', ['cursor']);
+        const listDeclaration = this.languageDefinition.variableDeclaration(
+            this.languageDefinition.variableKeyword, 
+            new TypeDefinition(this.languageDefinition.arrayKeyword, false, new TypeDefinition(this.definition.name, false, null, false), false, true), 
+            'list',
+            this.languageDefinition.nullKeyword);
+
+        const errorDeclaration = this.languageDefinition.variableDeclaration(
+            this.languageDefinition.variableKeyword, 
+            new TypeDefinition('Throwable', false, null, false, true), 'error', this.languageDefinition.nullKeyword);
+
+        const dbExecCall = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'rawQuery', ['sql', 'args']);
+        const assignRawQueryToCursor = this.languageDefinition.assignment(DatabaseTableSchemaClassParser.cursor.name, dbExecCall);
+
+        const params = [];
+        if (this.isReferencingOtherTables(fields)) {
+            params.push(DatabaseTableSchemaClassParser.databaseObject.name);
+        }
+        params.push(DatabaseTableSchemaClassParser.cursor.name);
+        const callReadListFromDbMethod = this.languageDefinition.methodCall(this.thisKeyword, 'readListFromDb', params);
         const assignList = this.languageDefinition.assignment('list', callReadListFromDbMethod);
         const tryBody = `\t\t${assignRawQueryToCursor}
 \t\t\t${assignList}`;
-        const catchBody = `\t\t\t${this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'onError', null)}`;
-        const finallyBody = `\t\t\t${this.languageDefinition.methodCall('cursor', 'close', null)}
-\t\t\t${this.languageDefinition.methodCall('db', 'close', null)}`;
+        const catchBody = `\t\t${this.languageDefinition.assignment('error', 'e')}`;
+        const cursor = new PropertyDefinition(DatabaseTableSchemaClassParser.cursor.name, 
+            new TypeDefinition(DatabaseTableSchemaClassParser.cursor.type.name, false, null, false, true));
+        const finallyBody = `\t\t${this.languageDefinition.methodCall(cursor, 'close', null)}
+\t\t\t${this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'close', null)}`;
         const tryCatch = this.languageDefinition.tryCatchStatement(tryBody, catchBody, finallyBody);
 
-        const returnCall = this.languageDefinition.returnDeclaration('list');
+        const ifError = this.languageDefinition.ifNotNullStatement('error', 'throw error');
+
+        const returnCall = this.languageDefinition.returnDeclaration('list!!');
 
         const methodBody = `\t\t${listDeclaration}
 \t\t${cursorDeclaration}
-
+\t\t${errorDeclaration}
 ${tryCatch}
-
+\t\t${ifError}
 \t\t${returnCall}`;
 
         return new MethodDefinition('select', 
@@ -504,7 +716,7 @@ ${tryCatch}
             [
                 DatabaseTableSchemaClassParser.databaseObject,
                 new ParameterDefinition('sql', new TypeDefinition(this.languageDefinition.stringKeyword)),
-                new ParameterDefinition('args', new TypeDefinition(this.languageDefinition.stringKeyword), null, false, [this.languageDefinition.varargsKeyword]),
+                new ParameterDefinition('args', new TypeDefinition(this.languageDefinition.stringKeyword), null, [this.languageDefinition.varargsKeyword]),
             ],
             methodBody);
     }
@@ -513,11 +725,13 @@ ${tryCatch}
         const sql = this.languageDefinition.stringDeclaration(
             `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`
         );
+        const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        
+        const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', [tableName]);
 
-        const formatMethodCall = this.languageDefinition.methodCall(sql, 'format', 
-            [`${this.languageDefinition.thisKeyword}.TABLE_NAME`]);
-
-        const dbExecCall = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'select', [formatMethodCall, this.languageDefinition.nullKeyword]);
+        const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 'select', [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall]);
         
         const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
 
@@ -533,15 +747,23 @@ ${tryCatch}
         const sql = this.languageDefinition.stringDeclaration(
             `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement} ${this.databaseLanguageDefinition.whereKeyword} ${this.languageDefinition.stringReplacement} = ${this.databaseLanguageDefinition.parameterKeyword}`
         );
+        
+        const fieldForTableName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableName = this.languageDefinition.callProperty(this.className, fieldForTableName, false);
 
-        const formatMethodCall = this.languageDefinition.methodCall(sql, 'format', 
-                [`${this.languageDefinition.thisKeyword}.TABLE_NAME`, `${this.languageDefinition.thisKeyword}.ID_FIELD`]);
+        const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableNameForField = this.languageDefinition.callProperty(this.className, fieldName, false);
+        
+        const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', [tableName, tableNameForField]);
 
-        const dbExecCall = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'select', [formatMethodCall, 'id']);
+        const idParam = new ParameterDefinition('id', new TypeDefinition(this.languageDefinition.stringKeyword));
+
+        const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 'select', [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall, this.languageDefinition.methodCall(idParam, 'toString', null)]);
 
         const listDeclaration = this.languageDefinition.variableDeclaration(
             this.languageDefinition.constKeyword, 
-            new TypeDefinition(this.languageDefinition.arrayListKeyword, false, new TypeDefinition(this.definition.name)),
+            new TypeDefinition(this.languageDefinition.arrayKeyword, false, new TypeDefinition(this.definition.name)),
             'list', dbExecCall);
 
         const returnCall = `${this.languageDefinition.returnDeclaration('list[0]')}`;
@@ -553,7 +775,7 @@ ${tryCatch}
             new TypeDefinition(this.definition.name),
             [
                 DatabaseTableSchemaClassParser.databaseObject,
-                new ParameterDefinition('id', new TypeDefinition(this.languageDefinition.intKeyword)),
+                idParam,
             ],
             methodBody);
     }
@@ -575,9 +797,9 @@ ${tryCatch}
 
         var dups = new Map<Object, boolean>();
         return methods.filter(function(method) {
-            var hash = method.valueOf();
-            var isDup = dups.get(hash);
-            dups.set(hash, true);
+            var hash = JSON.stringify(method.valueOf());
+            var isDup = dups[hash];
+            dups[hash] = true;
             return !isDup;
         });
     }
@@ -585,9 +807,13 @@ ${tryCatch}
     createMethodToSelectOneToN() {
         const methodName = `selectAllIdsInList`;
         let sql = `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`;
-        const returnInterrogation = `\t\t${this.languageDefinition.returnDeclaration(this.languageDefinition.stringDeclaration('?'))}`;
-        const interrogations = this.languageDefinition.lambdaMethod('ids', 'map', '', returnInterrogation);
-        const interrogationsJoined = this.languageDefinition.methodCall(interrogations, 'join', [this.languageDefinition.stringDeclaration(', ')]);
+
+        let returnInterrogation = this.languageDefinition.stringDeclaration('?');
+        if (this.languageDefinition.lambdaMethodsMustCallReturn) {
+            returnInterrogation = this.languageDefinition.returnDeclaration(this.languageDefinition.stringDeclaration('?'));
+        }
+        const interrogations = new PropertyDefinition(this.languageDefinition.lambdaMethod('ids', 'map', null, returnInterrogation), new TypeDefinition(this.languageDefinition.stringKeyword));
+        const interrogationsJoined = this.languageDefinition.methodCall(interrogations, this.languageDefinition.joinMethod, [this.languageDefinition.stringDeclaration(', ')]);
         const interrogationsVar = this.languageDefinition.variableDeclaration(
             this.languageDefinition.constKeyword, 
             new TypeDefinition(this.languageDefinition.stringKeyword),
@@ -595,10 +821,18 @@ ${tryCatch}
             interrogationsJoined);
         sql += ` ${this.databaseLanguageDefinition.whereKeyword} ${this.languageDefinition.stringReplacement} ${this.databaseLanguageDefinition.inKeyword} (${this.languageDefinition.stringReplacement})`;
         sql = this.languageDefinition.stringDeclaration(sql);
-        const formatMethodCall = this.languageDefinition.methodCall(sql, 'format', 
-            [`${this.languageDefinition.thisKeyword}.TABLE_NAME`, `${this.languageDefinition.thisKeyword}.ID_FIELD`, 'interrogations']);
+        const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
+        
+        const fieldForTableName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableName = this.languageDefinition.callProperty(this.className, fieldForTableName, false);
 
-        const dbExecCall = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'select', [formatMethodCall, 'ids']);
+        const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableNameForField = this.languageDefinition.callProperty(this.className, fieldName, false);
+        
+        const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', 
+            [tableName, tableNameForField, 'interrogations']);
+
+        const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 'select', [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall, '*ids']);
         
         const returnCall = `\t\t${interrogationsVar}\n\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
 
@@ -613,13 +847,22 @@ ${tryCatch}
 
     createMethodToSelectNToOne(reference: DefinitionReferenceHelper, fieldReference: DatabaseFieldHelper) {
         const methodName = `selectBy${reference.definition.name}Id`;
-        const sql = this.languageDefinition.stringDeclaration(
-            `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`
-        );
-        const formatMethodCall = this.languageDefinition.methodCall(sql, 'format', 
-            [`${this.languageDefinition.thisKeyword}.TABLE_NAME`]);
+        let sql = `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`;
+        sql += ` ${this.databaseLanguageDefinition.whereKeyword} ${fieldReference.databaseFieldName} = ${this.databaseLanguageDefinition.parameterKeyword}`;
 
-        const dbExecCall = this.languageDefinition.methodCall(this.languageDefinition.thisKeyword, 'select', [formatMethodCall, this.languageDefinition.nullKeyword]);
+        const sqlVariable = new PropertyDefinition(this.languageDefinition.stringDeclaration(sql), new TypeDefinition(this.languageDefinition.stringKeyword));
+
+        const fieldForTableName = new PropertyDefinition(`${reference.definition.name}${DatabaseTableSchemaClassParser.classSufix}`,
+            new TypeDefinition(this.languageDefinition.stringKeyword));
+        const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, 
+            new TypeDefinition(this.languageDefinition.stringKeyword));
+        const tableName = this.languageDefinition.callProperty(fieldForTableName, fieldName, false);
+
+        const formatMethodCall = this.languageDefinition.methodCall(sqlVariable, 'format', [tableName]);
+
+        const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 
+            'select',
+            [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall]);
         
         const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
 
@@ -627,7 +870,7 @@ ${tryCatch}
             new TypeDefinition(this.languageDefinition.arrayKeyword, true, new TypeDefinition(this.definition.name)),
             [
                 DatabaseTableSchemaClassParser.databaseObject,
-                new ParameterDefinition(fieldReference.propertyName, new TypeDefinition(this.languageDefinition.stringKeyword)),
+                new ParameterDefinition('id', new TypeDefinition(this.languageDefinition.stringKeyword)),
             ],
             returnCall);
     }
@@ -635,6 +878,7 @@ ${tryCatch}
 
 class DatabaseFieldHelper {
     static FIELD_SUFIX = '_FIELD';
+    static ID = 'ID';
 
     databaseLanguageDefinition: SqliteLanguageDefinition;
     languageDefinition: LanguageDefinition;
@@ -663,10 +907,13 @@ class DatabaseFieldHelper {
         this.searchByDependencyId = false;
         this.isArrayOfString = false;
 
+        if (this.type.subtype && this.type.isEnum) {
+            this.databaseType = new DatabaseTypeHelper(this.type.subtype, languageDefinition, databaseLanguageDefinition);
+        }
         if (this.type.subtype && !this.type.subtype.isNative) { // Is an array of other model
             this.searchById = true;
             this.searchByDependencyId = false;
-            this.fieldName = 'ID_FIELD';
+            this.fieldName = null;
             this.databaseFieldName = null;
         } else if (!this.type.subtype && !this.type.isNative && !fromClass) { // Is not an array
             this.searchById = false;
@@ -694,10 +941,9 @@ class DatabaseFieldHelper {
 
     toProperty() {
         return new PropertyDefinition(this.fieldName, 
-            new TypeDefinition(this.languageDefinition.stringKeyword, true),
+            new TypeDefinition(this.languageDefinition.stringKeyword, true, null, false, !this.required),
             this.languageDefinition.stringDeclaration(this.databaseFieldName),
-            this.required,
-            true);
+            [this.languageDefinition.staticKeyword]);
     }
 
     getDatabaseFieldProperties() {
@@ -725,8 +971,10 @@ class DatabaseTypeHelper {
             this.name = databaseLanguageDefinition.stringKeyword;
         } else if (type.name === languageDefinition.numberKeyword) {
             this.name = databaseLanguageDefinition.numberKeyword;
-        } else if (type.name === languageDefinition.intKeyword || type.name === languageDefinition.booleanKeyword) {
+        } else if (type.name === languageDefinition.intKeyword) {
             this.name = databaseLanguageDefinition.integerKeyword;
+        } else if (type.name === languageDefinition.booleanKeyword) {
+            this.name = databaseLanguageDefinition.booleanKeyword;
         } else {
             this.name = null;
         }

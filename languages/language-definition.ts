@@ -3,7 +3,7 @@ import ParameterDefinition from "../parser/definitions/parameter-definition";
 import ConstructorDefinition from "../parser/definitions/constructor-definition";
 import PropertyDefinition from "../parser/definitions/property-definition";
 
-interface LanguageDefinition {
+abstract class LanguageDefinition {
     name: string;
     fileExtension: string;
     useDataclassForModels: boolean;
@@ -15,6 +15,7 @@ interface LanguageDefinition {
     nullKeyword: string;
     anyTypeKeyword: string;
     intKeyword: string;
+    longKeyword: string;
     numberKeyword: string;
     stringKeyword: string;
     booleanKeyword: string;
@@ -33,60 +34,70 @@ interface LanguageDefinition {
     constructorAlsoDeclareFields: boolean;
     emptySuperMethod: string;
     overrideKeyword: string;
+    hasConvenienceMethodsToInsertUpdateOrDeleteFromDatabase: boolean;
+    lambdaMethodsMustCallReturn: boolean;
+    joinMethod: string;
+    staticKeyword: string;
 
-    printPackage(packageString: string);
+    abstract printPackage(packageString: string): string;
 
-    importDeclarations(imports: Array<string>): string;
+    abstract importDeclarations(imports: Array<string>): string;
 
-    classDeclaration(className: string, inheritsFrom: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string;
+    abstract classDeclaration(className: string, inheritsFrom: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, body: string, isDataClass: boolean, constructors: Array<ConstructorDefinition>): string;
 
-    methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, modifiers: Array<string>): string;
+    abstract methodDeclaration(methodName: string, parameters: Array<ParameterDefinition>, returnType: TypeDefinition, body: string, modifiers: Array<string>): string;
 
-    printParametersNamesWithTypes(parameters: Array<ParameterDefinition>, shouldBreakLine: boolean): string;
+    abstract printParametersNamesWithTypes(parameters: Array<ParameterDefinition>, shouldBreakLine: boolean): string;
 
-    parameterDeclaration(parameter: ParameterDefinition): string;
+    abstract parameterDeclaration(parameter: ParameterDefinition): string;
 
-    printType(type: TypeDefinition): string;
+    abstract printType(type: TypeDefinition): string;
 
-    printValues(values: Array<string>, shouldBreakLine: boolean): string;
+    abstract printValues(values: Array<string>, shouldBreakLine: boolean): string;
 
-    fieldDeclaration(visibility: string, name: string, type: TypeDefinition, defaultValue: string): string;
+    abstract fieldDeclaration(name: string, type: TypeDefinition, defaultValue: string, modifiers: Array<string>): string;
 
-    methodCall(caller: string, methodName: string, parameterValues: Array<string>): string;
+    abstract methodCall(caller: PropertyDefinition, methodName: string, parameterValues: Array<string>): string;
 
-    variableDeclaration(declareType: string, type: TypeDefinition, name: string, defaultValue: string): string;
+    abstract variableDeclaration(declareType: string, type: TypeDefinition, name: string, defaultValue: string): string;
 
-    returnDeclaration(value: string): string;
+    abstract returnDeclaration(value: string): string;
 
-    constructorDeclaration(className: string, properties: Array<PropertyDefinition>, returnType: TypeDefinition, body: string, isDataClass: boolean): string;
+    abstract constructorDeclaration(className: string, properties: Array<PropertyDefinition>, returnType: TypeDefinition, body: string, isDataClass: boolean): string;
 
-    enumDeclaration(enumName: string, values: Array<string>): string;
+    abstract enumDeclaration(enumName: string, values: Array<string>): string;
 
-    ifStatement(condition: string, body: string): string;
+    abstract ifStatement(condition: string, body: string): string;
 
-    whileStatement(condition: string, body: string): string;
+    abstract whileStatement(condition: string, body: string): string;
 
-    lambdaMethod(caller: string, method: string, varName: string, body: string): string;
+    abstract lambdaMethod(caller: string, method: string, varName: string, body: string): string;
 
-    ifNullStatement(object: string, body: string): string;
+    abstract ifNullStatement(object: string, body: string): string;
 
-    assignment(name1: string, name2: string): string;
+    abstract ifNotNullStatement(object: string, body: string): string;
 
-    constructObject(type: TypeDefinition, parameters: Array<string>): string;
+    abstract assignment(name1: string, name2: string): string;
 
-    stringDeclaration(content: string): string;
+    abstract constructObject(type: TypeDefinition, parameters: Array<string>): string;
 
-    tryCatchStatement(tryBody: string, catchBody: string, finallyBody: string): string;
+    abstract stringDeclaration(content: string): string;
 
-    compareTypeOfObjectsMethod(var1: string, var2: string, negative: boolean): string;
+    abstract tryCatchStatement(tryBody: string, catchBody: string, finallyBody: string): string;
 
-    equalMethod(var1: string, var2: string, negative: boolean): string;
+    abstract compareTypeOfObjectsMethod(var1: string, var2: string, negative: boolean): string;
 
-    simpleComparison(var1: string, var2: string, negative: boolean): string;
+    abstract equalMethod(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string;
 
-    arrayComparison(var1: string, var2: string, negative: boolean): string;
+    abstract simpleComparison(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string;
 
-    cast(obj: string, type: TypeDefinition): string;
+    abstract arrayComparison(var1: PropertyDefinition, var2: PropertyDefinition, negative: boolean): string;
+
+    abstract cast(obj: string, type: TypeDefinition): string;
+
+    abstract callProperty(caller: PropertyDefinition, property: PropertyDefinition, insertNullable: boolean): string;
+
+    abstract printPropertyValue(property: PropertyDefinition, insertNullable: boolean): string;
 }
 
 export default LanguageDefinition;

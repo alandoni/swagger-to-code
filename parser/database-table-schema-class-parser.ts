@@ -192,7 +192,7 @@ ${databaseFields}
 \t\t\t)`);
         const methodCall = `${this.languageDefinition.methodCall(new PropertyDefinition(tableString, new TypeDefinition(this.languageDefinition.stringKeyword)), 'format', tablePlusParameters)}`;
         
-        let methodString = `\t\t${this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'execSQL', [methodCall])};`;
+        let methodString = `\t\t${this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'execSQL', [methodCall])}`;
 
         return new MethodDefinition('createTable',
             null,
@@ -242,7 +242,7 @@ ${databaseFields}
 
     isReferencingOtherTables(fields: Array<DefinitionPropertyHelper>) {
         return fields.filter((field) => {
-            return !field.type.isNative && field.refersTo && field.refersTo.definition;
+            return !field.type.isNative && field.refersTo && field.refersTo.definition && field.refersTo.definition.needsTable;
         }).length > 0;
     }
 
@@ -424,7 +424,7 @@ ${databaseFields}
                         key: DatabaseFieldHelper.getFieldNameForProperty(property),
                         value: this.getPropertyNameToBeCalled(entry.value, entry.required, entry.field),
                         field: property,
-                        required: property.required && entry.required
+                        required: entry.required && property.required
                     };
                 });
                 this.getFieldNameAndPropertyNameToBeCalled(entries).map((entry) => {
@@ -575,16 +575,17 @@ ${databaseFields}
 
     createBatchInsertOrUpdateMethod() {
         const className = this.definition.name;
-        const objectName = `${this.classNameToVar(className)}Array`;
+        const variable = this.classNameToVar(className);
+        const objectName = `${variable}Array`;
 
-        const callInsertOrUpdateMethod = this.languageDefinition.methodCall(this.thisKeyword, 'insertOrUpdate', ['db', objectName]);
+        const callInsertOrUpdateMethod = this.languageDefinition.methodCall(this.thisKeyword, 'insertOrUpdate', ['db', variable]);
 
         let mapBodyString = callInsertOrUpdateMethod;
         if (this.languageDefinition.lambdaMethodsMustCallReturn) {
             mapBodyString = `${this.languageDefinition.returnDeclaration(callInsertOrUpdateMethod)}`;
         }
 
-        const callMapMethod = this.languageDefinition.lambdaMethod(objectName, 'map', objectName, mapBodyString);
+        const callMapMethod = this.languageDefinition.lambdaMethod(objectName, 'map', variable, mapBodyString);
         const mapMethodProperty = new PropertyDefinition(callMapMethod, new TypeDefinition(this.languageDefinition.stringKeyword));
         const convertMap = this.languageDefinition.methodCall(mapMethodProperty, 'toTypedArray', null);
         const methodString = `\t\t${this.languageDefinition.returnDeclaration(convertMap)}`;
@@ -884,7 +885,7 @@ ${tryCatch}
 
         const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 
             'select',
-            [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall]);
+            [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall, 'id']);
         
         const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
 

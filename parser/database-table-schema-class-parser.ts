@@ -1,17 +1,18 @@
 import LanguageDefinition from "../languages/language-definition";
 import SqliteLanguageDefinition from "../languages/sqlite-language-definition";
-import { DefinitionHelper, DefinitionReferenceHelper, RelationshipType } from "./language-parser";
+import { DefinitionHelper, DefinitionReferenceHelper, RelationshipType, DefinitionPropertyHelper, DefinitionTypeHelper } from "./language-parser";
 import ParameterDefinition from "./definitions/parameter-definition";
 import TypeDefinition from "./definitions/type-definition";
-import ModelClassParser from "./model-class-parser";
 import PropertyDefinition from "./definitions/property-definition";
 import StringUtils from "../string-utils";
 import ClassDefinition from "./definitions/class-definition";
 import MethodDefinition from "./definitions/method-definition";
 import Parser from "./parser-interface";
-import { LanguageSettings, TypeOfClass } from "../configuration";
+import { LanguageSettings, TypeOfClass, ClassSettings } from "../configuration";
 import Languages from "../languages/languages";
 import KotlinClassDefinition from "./definitions/kotlin-class-definition";
+import { YamlType } from "./swagger-objects-representation/definition";
+import ArrayUtils from "../array-utils";
 
 export default class DatabaseTableSchemaClassParser implements Parser {
     static STRING_TO_ARRAY_SEPARATOR = ';';
@@ -37,17 +38,8 @@ export default class DatabaseTableSchemaClassParser implements Parser {
     }
 
     parse(): ClassDefinition {
-        const nativeDependencies = [
-            'android.database.sqlite.SQLiteDatabase',
-            'android.database.Cursor',
-            'android.content.ContentValues',
-        ];
         const className = this.definition.name;
         this.className = new PropertyDefinition(`${className}${DatabaseTableSchemaClassParser.classSufix}`, new TypeDefinition(this.definition.name));
-
-        const fields = this.parseProperties();
-        
-        const parseDependencies = ModelClassParser.parseDependencies(this.definition, this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES));
 
         const classSettings = this.configuration.getClassSettings(TypeOfClass.DATABASE_CLASSES);
 
@@ -59,25 +51,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             return TypeDefinition.typeBySplittingPackageAndName(interfaceString, className);
         });
 
-        const dependencies = [
-            ...nativeDependencies, 
-            `${this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES).package}.${this.definition.name}`,
-            ...parseDependencies,
-            inherits ? inherits.package : null,
-            ...implementsInterfaces.map((interfaceType) => {
-                return interfaceType.package;
-            }),
-            ...this.definition.references.map((dependency) => {
-                if (dependency.definition.needsTable) {
-                    return `${classSettings.package}.${dependency.definition.name}${DatabaseTableSchemaClassParser.classSufix}`;
-                }
-                return null;
-            }).filter((dependency) => {
-                return dependency != null;
-            }),
-        ].filter((dependency) => {
-            return dependency !== null;
-        });
+        const dependencies = this.getDependencies(inherits, implementsInterfaces, classSettings);
         
         let tableNameString = new PropertyDefinition(
             DatabaseTableSchemaClassParser.tableNameProperty,
@@ -86,19 +60,21 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             [this.languageDefinition.staticKeyword]);
 
         const methods = [
-            this.createCreateTableMethod(fields),
-            this.createReadFromDbMethod(fields),
-            this.createInsertOrUpdateMethod(fields),
+            this.createCreateTableMethod(this.definition.properties),
+            this.createReadFromDbMethod(this.definition.properties),
+            this.createInsertOrUpdateMethod(this.definition.properties),
             this.createBatchInsertOrUpdateMethod(),
             this.createDeleteMethod(),
-            this.createReadListFromDbMethod(fields),
-            this.createSelectMethod(fields),
+            this.createReadListFromDbMethod(this.definition.properties),
+            this.createSelectMethod(this.definition.properties),
             this.createSelectAllMethod(),
             this.createSelectByIdMethod(),
-            ...this.createMethodsBasedOnDependencies(fields),
+            ...this.createMethodsBasedOnDependencies(this.definition.properties),
         ];
 
-        const properties = this.getAllProperties(tableNameString, fields);
+        const properties = [tableNameString, ...this.getAllProperties(this.definition.properties).map((property) => {
+            return DatabaseFieldHelper.toProperty(property, this.languageDefinition); 
+        })];
 
         const packageString = classSettings.package;
 
@@ -115,90 +91,95 @@ export default class DatabaseTableSchemaClassParser implements Parser {
         return tableClass;
     }
 
-    getAllProperties(tableNameString: PropertyDefinition, fields: Array<DatabaseFieldHelper>): Array<PropertyDefinition> {
-        const properties = [tableNameString, ...fields.filter((field) => {
-            return !field.fromClass && field.fieldName;
-        }).map((field) => {
-            return field.toProperty();
-        })];
-
-        fields.filter((field) => {
-            return field.fromClass;
-        }).map((field) => {
-            field.fromClass.map((newField) => {
-                properties.push(newField.toProperty());
-            });
-        });
-        return properties;
-    }
-
-    parseProperties(): Array<DatabaseFieldHelper> {
-        let fields = this.definition.properties.map((property) => {
-            let subObject = null;
-            const subProperties = property.subProperties;
-            if (subProperties) {
-                const propertiesFromClass = subProperties.map((subProperty) => {
-                    const prefix = property.name;
-                    subObject = new DatabaseFieldHelper(
-                        this.databaseLanguageDefinition,
-                        this.languageDefinition,
-                        subProperty.name,
-                        ModelClassParser.getPropertyType(this.languageDefinition, subProperty.type, subProperty.required),
-                        subProperty.required, null);
-                    subObject.fieldName = `${prefix.toUpperCase()}_${subObject.fieldName}`;
-                    subObject.databaseFieldName = `${prefix}_${subObject.databaseFieldName}`;
-                    subObject.fromClass = property.name;
-                    return subObject;
-                });
-
-                return new DatabaseFieldHelper(this.databaseLanguageDefinition,
-                    this.languageDefinition,
-                    property.name,
-                    ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required),
-                    property.required,
-                    propertiesFromClass);
-            }
-
-            return new DatabaseFieldHelper(this.databaseLanguageDefinition, this.languageDefinition,
-                property.name,
-                ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required),
-                property.required,
-                subObject);
-        });
-
-        return fields;
-    }
-
-    createCreateTableMethod(fields: Array<DatabaseFieldHelper>) {
-        let typedFields = fields.filter((field) => {
-            return !field.searchById && !field.fromClass;
-        });
-
-        fields.filter((field) => {
-            return field.fromClass;
-        }).map((field) => {
-            field.fromClass.map((field) => {
-                typedFields.push(field);
-            });
-        });
-
-        const databaseFields = typedFields.map((field) => {
-            const properties = field.getDatabaseFieldProperties();
-
-            try {
-                let fieldString = `\t\t\t\t\`${this.languageDefinition.stringReplacement}\` ${field.databaseType.name}`;
-                if (properties) {
-                    fieldString += ` ${properties}`;
+    getDependencies(inherits: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, classSettings: ClassSettings) {
+        const nativeDependencies = [
+            'android.database.sqlite.SQLiteDatabase',
+            'android.database.Cursor',
+            'android.content.ContentValues',
+        ];        
+        const parsedDependencies = this.parseDependencies(this.definition);
+        return [
+            ...nativeDependencies, 
+            `${this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES).package}.${this.definition.name}`,
+            ...parsedDependencies,
+            inherits ? inherits.package : null,
+            ...implementsInterfaces.map((interfaceType) => {
+                return interfaceType.package;
+            }),
+            ...this.definition.references.map((dependency) => {
+                if (dependency.definition.needsTable) {
+                    return `${classSettings.package}.${dependency.definition.name}${DatabaseTableSchemaClassParser.classSufix}`;
                 }
-                return fieldString;
-            } catch (e) {
-                console.log(field);
                 return null;
+            }).filter((dependency) => {
+                return dependency != null;
+            }),
+        ].filter((dependency) => {
+            return dependency !== null;
+        });
+    }
+
+    parseDependencies(definition: DefinitionHelper): Array<string> {
+        const modelClassSettings = this.configuration.getClassSettings(TypeOfClass.MODEL_CLASSES);
+
+        const dependencies = [];
+        definition.references.forEach((reference) => {
+            dependencies.push(`${modelClassSettings.package}.${reference.definition.name}`);
+            if (reference.definition.references) {
+                this.parseDependencies(reference.definition).forEach((dependency) => {
+                    dependencies.push(dependency);
+                });
             }
+        });
+        return ArrayUtils.removeDuplicates(dependencies.filter((dependency) => {
+            return dependency != null;
+        }));
+    }
+
+    getAllProperties(properties: Array<DefinitionPropertyHelper>): Array<DefinitionPropertyHelper> {
+        const props = properties.filter((property) => {
+            return property.type.isNative || property.type.isEnum || DatabaseFieldHelper.isArrayOfString(property.type);
+        });
+
+        properties.filter((property) => {
+            return !property.type.isNative && !property.type.isEnum;
+        }).forEach((property) => {
+            const definition = property.refersTo && property.refersTo.definition;
+            if (definition) {
+                if (property.refersTo.relationship === RelationshipType.ONE_TO_ONE && !definition.needsTable) {
+                    this.getAllProperties(definition.properties).forEach((innerProperty) => {
+                        if (!innerProperty.refersTo) {
+                            innerProperty.refersTo = new DefinitionReferenceHelper(definition, property, null);
+                        } else {
+                            innerProperty.refersTo.property = property;
+                        }
+                        props.push(innerProperty);
+                    });
+                } else if (property.refersTo.relationship === RelationshipType.ONE_TO_ONE || 
+                        property.refersTo.relationship === RelationshipType.ONE_TO_N) {
+                    props.push(property);
+                }
+            }
+        });
+        return props.filter((property) => {
+            return property != null;
+        });
+    }
+
+    createCreateTableMethod(properties: Array<DefinitionPropertyHelper>) {
+        const fields = this.getAllProperties(properties);
+        const databaseFields = fields.map((property) => {
+            const properties = DatabaseFieldHelper.getDatabaseFieldProperties(property, this.databaseLanguageDefinition);
+
+            let fieldString = `\t\t\t\t\`${this.languageDefinition.stringReplacement}\` ${DatabaseFieldHelper.getDatabaseType(property.type, this.databaseLanguageDefinition)}`;
+            if (properties) {
+                fieldString += ` ${properties}`;
+            }
+            return fieldString;
         }).join(',\n');
 
-        const parameters = typedFields.map((field) => {
-            const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
+        const parameters = fields.map((field) => {
+            const fieldName = new PropertyDefinition(DatabaseFieldHelper.getFieldNameForProperty(field), new TypeDefinition(this.languageDefinition.stringKeyword));
             return `\t\t${this.languageDefinition.callProperty(this.className, fieldName, false)}`;
         });
 
@@ -229,53 +210,16 @@ ${databaseFields}
         return className.substr(0, 1).toUpperCase() + className.substr(1);
     }
 
-    readFromDatabaseAccordingToFieldType(className: string, field: DatabaseFieldHelper) {
-        const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const columnName = new PropertyDefinition(this.languageDefinition.callProperty(this.className, fieldName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
-        const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName.name]);
-
-        switch(field.databaseType.name) {
-            case this.databaseLanguageDefinition.numberKeyword:
-                return this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getDouble', [methodGetIndexOfColumn]);
-            case this.databaseLanguageDefinition.stringKeyword:
-                const method = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]);
-                if (field.type.isEnum) {
-                    const classNameProperty = new PropertyDefinition(className, new TypeDefinition(className));
-                    const fieldType = new PropertyDefinition(field.type.name, new TypeDefinition(this.languageDefinition.stringKeyword));
-                    const caller = new PropertyDefinition(this.languageDefinition.callProperty(classNameProperty, fieldType, false), new TypeDefinition(this.languageDefinition.stringKeyword));
-                    return this.languageDefinition.methodCall(caller, 'valueOf', [method]);
-                }
-                return method;
-
-            case this.databaseLanguageDefinition.integerKeyword:
-            case this.databaseLanguageDefinition.booleanKeyword:
-                if (field.type.name === this.languageDefinition.booleanKeyword) {
-                    const variable = new PropertyDefinition(this.languageDefinition.methodCall(
-                        DatabaseTableSchemaClassParser.cursor, 'getInt', [methodGetIndexOfColumn]), 
-                        new TypeDefinition(this.languageDefinition.stringKeyword));
-                    return this.languageDefinition.simpleComparison(
-                        variable,
-                        new PropertyDefinition('1', new TypeDefinition(this.languageDefinition.stringKeyword)),
-                        false);
-                }
-                return this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getInt',  [methodGetIndexOfColumn]);
-            default:
-                // throw new Error(`QUE? ${JSON.stringify(field)}`);
-                return null;
-        }
-    }
-
-    createReadFromDbMethod(fields: Array<DatabaseFieldHelper>) {
+    createReadFromDbMethod(fields: Array<DefinitionPropertyHelper>) {
         const className = this.definition.name;
         const varName = this.classNameToVar(className);
 
         const parameters = fields.map((field) => {
-            const nonNative = this.handleNonNativeTypes(field);
-            if (nonNative) {
-                return nonNative;
+            const native = this.readFromDatabaseAccordingToFieldType(className, field);
+            if (native) {
+                return native;
             }
-
-            return this.readFromDatabaseAccordingToFieldType(className, field);
+            return this.readNonNativeTypesFromDatabase(field);
         });
 
         let methodString = `\t\t${this.languageDefinition.variableDeclaration(this.languageDefinition.constKeyword, 
@@ -296,25 +240,72 @@ ${databaseFields}
             methodString);
     }
 
-    isReferencingOtherTables(fields: Array<DatabaseFieldHelper>) {
+    isReferencingOtherTables(fields: Array<DefinitionPropertyHelper>) {
         return fields.filter((field) => {
-            return field.searchByDependencyId || field.searchById;
+            return !field.type.isNative && field.refersTo && field.refersTo.definition;
         }).length > 0;
     }
 
-    handleNonNativeTypes(field: DatabaseFieldHelper) {
-        const className = this.definition.name;
-        if (field.fromClass) {
-            const params = field.fromClass.map((field) => {
-                return this.readFromDatabaseAccordingToFieldType(className, field);
-            });
+    readFromDatabaseAccordingToFieldType(className: string, field: DefinitionPropertyHelper): string {
+        const fieldName = new PropertyDefinition(DatabaseFieldHelper.getFieldNameForProperty(field), new TypeDefinition(this.languageDefinition.stringKeyword));
+        const columnName = new PropertyDefinition(this.languageDefinition.callProperty(this.className, fieldName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+        const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName.name]);
 
-            return this.languageDefinition.constructObject(field.type, params);
+        let typeName = field.type.name;
+        if (field.enum) {
+            typeName = YamlType.TYPE_STRING;
         }
-        const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
+
+        switch(typeName) {
+            case YamlType.TYPE_NUMBER:
+                return this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getDouble', [methodGetIndexOfColumn]);
+            case YamlType.TYPE_STRING:
+                const method = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]);
+                if (field.type.isEnum) {
+                    const classNameProperty = new PropertyDefinition(className, new TypeDefinition(className));
+                    const fieldType = new PropertyDefinition(field.type.name, new TypeDefinition(this.languageDefinition.stringKeyword));
+                    const caller = new PropertyDefinition(this.languageDefinition.callProperty(classNameProperty, fieldType, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+                    return this.languageDefinition.methodCall(caller, 'valueOf', [method]);
+                }
+                return method;
+            case YamlType.TYPE_BOOLEAN:
+                const variable = new PropertyDefinition(this.languageDefinition.methodCall(
+                    DatabaseTableSchemaClassParser.cursor, 'getInt', [methodGetIndexOfColumn]), 
+                    new TypeDefinition(this.languageDefinition.stringKeyword));
+                return this.languageDefinition.simpleComparison(
+                    variable,
+                    new PropertyDefinition('1', new TypeDefinition(this.languageDefinition.stringKeyword)),
+                    false);
+            case YamlType.TYPE_INTEGER:
+                return this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getInt',  [methodGetIndexOfColumn]);
+            default:
+                // throw new Error(`QUE? ${JSON.stringify(field)}`);
+                return null;
+        }
+    }
+
+    readNonNativeTypesFromDatabase(field: DefinitionPropertyHelper): string {
+        const className = this.definition.name;
+        if (field.refersTo && (field.refersTo.relationship === null || field.refersTo.relationship === RelationshipType.ONE_TO_ONE)) {
+            if (!field.refersTo.definition.needsTable) {
+                const params = field.refersTo.definition.properties.map((field) => {
+                    const native = this.readFromDatabaseAccordingToFieldType(className, field);
+                    if (native) {
+                        return native;
+                    }
+                    return this.readNonNativeTypesFromDatabase(field);
+                });
+
+                return this.languageDefinition.constructObject(DefinitionTypeHelper.toTypeDefinition(field.type, field.required, this.languageDefinition), params);
+            }
+        }
+
+        const fieldName = new PropertyDefinition(DatabaseFieldHelper.getFieldNameForProperty(field), new TypeDefinition(this.languageDefinition.stringKeyword));
         const columnName = this.languageDefinition.callProperty(this.className, fieldName, false);
         const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName]);
-        if (field.searchByDependencyId) {
+
+        const otherDefinition = field.refersTo && field.refersTo.definition;
+        if (otherDefinition && field.refersTo.relationship === RelationshipType.ONE_TO_ONE) {
             const constructObject = new PropertyDefinition(
                 this.languageDefinition.constructObject(new TypeDefinition(`${field.type.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
                 new TypeDefinition(this.definition.name)
@@ -324,9 +315,9 @@ ${databaseFields}
                 constructObject, 
                 `selectById`, ['db', getId])}`;
         }
-        if (field.searchById) {
+        if (otherDefinition && field.refersTo.relationship === RelationshipType.N_TO_ONE) {
             const constructObject = new PropertyDefinition(this.languageDefinition.constructObject(
-                new TypeDefinition(`${field.type.subtype.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
+                new TypeDefinition(`${field.type.subType.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
                 new TypeDefinition(this.definition.name));
 
             const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
@@ -338,85 +329,79 @@ ${databaseFields}
                 constructObject, 
                 `selectBy${className}Id`, ['db', getId])}`;
         }
-        if (field.isArrayOfString) {
-            const callCursorGetStringMethod = new PropertyDefinition(
-                this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]), 
-                new TypeDefinition(this.languageDefinition.stringKeyword));
-                
-            const splitMethod = new PropertyDefinition(this.languageDefinition.methodCall(
-                callCursorGetStringMethod, 
-                'split', [this.languageDefinition.stringDeclaration(DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR)]
-            ), new TypeDefinition(this.languageDefinition.stringKeyword));
-            return this.languageDefinition.methodCall(splitMethod, 'toTypedArray', null);
+
+        const callCursorGetStringMethod = new PropertyDefinition(
+            this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]), 
+            new TypeDefinition(this.languageDefinition.stringKeyword));
+            
+        const splitMethod = new PropertyDefinition(this.languageDefinition.methodCall(
+            callCursorGetStringMethod, 
+            'split', [this.languageDefinition.stringDeclaration(DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR)]
+        ), new TypeDefinition(this.languageDefinition.stringKeyword));
+        const typedArray = this.languageDefinition.methodCall(splitMethod, 'toTypedArray', null);
+        if (DatabaseFieldHelper.isArrayOfString(field.type)) {
+            return typedArray;
+        }
+        if (otherDefinition && field.refersTo.relationship === RelationshipType.ONE_TO_N) {
+            const constructObject = new PropertyDefinition(this.languageDefinition.constructObject(
+                new TypeDefinition(`${field.type.subType.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
+                new TypeDefinition(this.definition.name));
+
+            return `${this.languageDefinition.methodCall(
+                constructObject, 
+                `selectAllIdsInList`, ['db', typedArray])}`;
         }
         return null;
     }
 
-    createInsertOrUpdateMethodWithConvenienceMethod(fields: Array<DatabaseFieldHelper>) {
+    createInsertOrUpdateMethodWithConvenienceMethod(fields: Array<DefinitionPropertyHelper>) {
+        const values = new PropertyDefinition('values', new TypeDefinition('ContentValues'));
         const className = this.definition.name;
-
         const objectName = this.classNameToVar(className);
 
-        const { onlyNativeTypes, nonNativeTypes } = this.getFieldsSeparatedByNative(fields)
+        const onlyNativeTypes = fields.filter((property) => {
+            return !property.type.isArray() || DatabaseFieldHelper.isArrayOfString(property.type);
+        });
+
+        const onlyNativeTypesNames = this.getFieldNameAndPropertyNameToBeCalled(onlyNativeTypes.map((field) => {
+            return {
+                key: DatabaseFieldHelper.getFieldNameForProperty(field),
+                value: objectName,
+                field: field,
+                required: true
+            }
+        }));
         
-        const values = new PropertyDefinition('values', new TypeDefinition('ContentValues'));
+        const contentValues = onlyNativeTypesNames.map((entry) => {
+            const fieldName = new PropertyDefinition(entry.key, new TypeDefinition(this.languageDefinition.stringKeyword));
+            const method = this.languageDefinition.methodCall(
+                values, 
+                'put', 
+                [
+                    this.languageDefinition.callProperty(this.className, fieldName, false), 
+                    `${entry.value}`
+                ]);
+            const field = entry.field;
+            if (!field.required && (DatabaseFieldHelper.isArrayOfString(field.type) || field.type.isEnum)) {
+                return `\t\t${this.languageDefinition.ifNotNullStatement(`${objectName}.${field.name}`, method)}`;
+            } else {
+                return `\t\t${method}`;
+            }
+        }).join('\n');
+
         const valuesVariable = this.languageDefinition.variableDeclaration(
             this.languageDefinition.constKeyword, 
             values.type, 
             values.name, 
             this.languageDefinition.constructObject(values.type, null));
 
-        const onlyNativeTypesNames = onlyNativeTypes.map((field: DatabaseFieldHelper) => {
-            let name = '';
-            let propertyName = field.propertyName;
-            if (field.fromClass) {
-                propertyName = `${field.fromClass}.${propertyName}`;
-            }
-            if (field.type.isEnum) {
-                name = '.name';
-                if (field.type.nullable) {
-                    name = `!!${name}`;
-                }
-            } else if (!field.type.isNative && field.searchByDependencyId) {
-                if (field.type.nullable) {
-                    propertyName += '?';
-                }
-                propertyName += '.id';
-            } else if (field.isArrayOfString) {
-                if (field.type.nullable) {
-                    propertyName = `${propertyName}!!`;
-                }
-
-                propertyName = this.languageDefinition.methodCall(
-                    new PropertyDefinition(propertyName, new TypeDefinition(this.languageDefinition.stringKeyword)),
-                    this.languageDefinition.joinMethod, 
-                    [this.languageDefinition.stringDeclaration(`${DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR}`)]);
-            }
-            const fieldName = new PropertyDefinition(field.fieldName, new TypeDefinition(this.languageDefinition.stringKeyword));
-            const method = this.languageDefinition.methodCall(
-                values, 
-                'put', 
-                [
-                    this.languageDefinition.callProperty(this.className, fieldName, false), 
-                    `${objectName}.${propertyName}${name}`
-                ]);
-
-            if (field.type.nullable && (field.isArrayOfString || field.type.isEnum)) {
-                return `\t\t${this.languageDefinition.ifNotNullStatement(`${objectName}.${field.propertyName}`, method)}`;
-            } else {
-                return `\t\t${method}`;
-            }
-        }).join('\n');
-
         const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
         const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
         const callExecSqlMethod = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'insertWithOnConflict', [ tableName, this.languageDefinition.nullKeyword, 'values', 'SQLiteDatabase.CONFLICT_REPLACE']);
         let methodString = `\t\t${valuesVariable}\n`;
-        methodString += `${onlyNativeTypesNames}\n`;
+        methodString += `${contentValues}\n`;
 
-        if (nonNativeTypes.length > 0) {
-            methodString += `\n${this.getInsertMethodForNonNativeTypes(nonNativeTypes, objectName)}\n\n`;
-        }
+        methodString += this.getInsertMethodForNonNativeTypes(fields, objectName);
 
         methodString += `\t\t${this.languageDefinition.returnDeclaration(callExecSqlMethod)}`;
 
@@ -429,7 +414,72 @@ ${databaseFields}
             methodString);
     }
 
-    createInsertOrUpdateMethod(fields: Array<DatabaseFieldHelper>) {
+    private getFieldNameAndPropertyNameToBeCalled(fields: Array<any>): Array<any> {
+        const processedFields = []
+        fields.forEach((entry) => {
+            const reference = entry.field.refersTo;
+            if (reference && reference.relationship !== null && !reference.definition.needsTable) {
+                const entries = reference.definition.properties.map((property) => {
+                    return {
+                        key: DatabaseFieldHelper.getFieldNameForProperty(property),
+                        value: this.getPropertyNameToBeCalled(entry.value, entry.required, entry.field),
+                        field: property,
+                        required: property.required && entry.required
+                    };
+                });
+                this.getFieldNameAndPropertyNameToBeCalled(entries).map((entry) => {
+                    processedFields.push(entry);
+                });
+            } else {
+                processedFields.push({
+                    key: DatabaseFieldHelper.getFieldNameForProperty(entry.field),
+                    value: this.getPropertyNameToBeCalled(entry.value, entry.required, entry.field),
+                    field: entry.field,
+                    required: entry.field.required
+                });
+            }
+        });
+        return processedFields;
+    }
+
+    private getPropertyNameToBeCalled(caller: string, isCallerRequired: boolean, field: DefinitionPropertyHelper) {
+        let name = field.name;
+
+        if (DatabaseFieldHelper.isArrayOfString(field.type) || field.refersTo && field.refersTo.relationship === RelationshipType.ONE_TO_N) {
+            if (!field.required) {
+                name += '?';
+            }
+            let methodCaller = null;
+            methodCaller = new PropertyDefinition(caller, new TypeDefinition(this.languageDefinition.stringKeyword));
+            const propertyName = new PropertyDefinition(name, new TypeDefinition(this.languageDefinition.stringKeyword));
+            const callProperty = new PropertyDefinition(this.languageDefinition.callProperty(methodCaller, propertyName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+            return `${this.languageDefinition.methodCall(callProperty, this.languageDefinition.joinMethod, 
+                [this.languageDefinition.stringDeclaration(DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR)])}`;
+        }
+
+        if (field.type.isEnum) {
+            if (!field.required) {
+                name += '?';
+            }
+            name += '.name';
+        } else  if (!field.type.isNative && field.refersTo && field.refersTo.definition.needsTable) {
+            if (!field.required) {
+                name += '?';
+            }
+            name += '.id';
+        }
+        
+        if (caller) {
+            let callerName = caller;
+            if (!isCallerRequired) {
+                callerName += '?';
+            }
+            return `${callerName}.${name}`;
+        }
+        return name;
+    }
+
+    createInsertOrUpdateMethod(fields: Array<DefinitionPropertyHelper>) {
         if (this.languageDefinition.hasConvenienceMethodsToInsertUpdateOrDeleteFromDatabase) {
             return this.createInsertOrUpdateMethodWithConvenienceMethod(fields);
         }
@@ -439,11 +489,10 @@ ${databaseFields}
 
         const objectName = this.classNameToVar(className);
 
-        const { onlyNativeTypes, nonNativeTypes } = this.getFieldsSeparatedByNative(fields)
-
-        onlyNativeTypes.filter((property) => {
-            return property.fieldName !== 'id';
-        }).map(() => {
+        const onlyNativeTypes = fields.filter((property) => {
+            return !property.type.isArray() || DatabaseFieldHelper.isArrayOfString(property.type);
+        });
+        onlyNativeTypes.map(() => {
             interrogations.push('?');
             stringReplacements.push(`\`${this.languageDefinition.stringReplacement}\``);
         });
@@ -458,9 +507,7 @@ ${databaseFields}
 
         let methodString = `\t\t${this.languageDefinition.returnDeclaration(callExecSqlMethod)}`;
 
-        if (nonNativeTypes.length > 0) {
-            methodString += `\n${this.getInsertMethodForNonNativeTypes(nonNativeTypes, objectName)}`;
-        }
+        methodString += `\n${this.getInsertMethodForNonNativeTypes(fields, objectName)}`;
 
         return new MethodDefinition('insertOrUpdate',
             new TypeDefinition(this.languageDefinition.intKeyword),
@@ -471,86 +518,56 @@ ${databaseFields}
             methodString);
     }
 
-    getInsertMethodForNonNativeTypes(nonNativeTypes: Array<DatabaseFieldHelper>, objectName: string) {
-        return nonNativeTypes.filter((property) => {
-            return property.type.subtype != null;
+    getInsertMethodForNonNativeTypes(nonNativeTypes: Array<DefinitionPropertyHelper>, objectName: string) {
+        const methods = nonNativeTypes.filter((property) => {
+            return property.type.isArray() && !DatabaseFieldHelper.isArrayOfString(property.type);
         }).map((property) => {
-            let methodName = 'insertOrUpdate';
-            if (property.type.name.indexOf(this.languageDefinition.arrayKeyword) > -1) {
-                methodName = 'batchInsertOrUpdate';
-            }
-
             const constructObject = new PropertyDefinition(
                 this.languageDefinition.constructObject(
-                    new TypeDefinition(`${property.type.subtype.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
+                    new TypeDefinition(`${property.type.subType.name}${DatabaseTableSchemaClassParser.classSufix}`), null),
                 new TypeDefinition(this.definition.name)
             );
 
-            const callMethod = this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}`]);
-            if (property.type.nullable) {
-                const callMethod = this.languageDefinition.methodCall(constructObject, methodName, ['db', `${objectName}.${property.propertyName}!!`]);
-                return `\t\t${this.languageDefinition.ifNotNullStatement(`${objectName}.${property.propertyName}`, callMethod)}`;
-            } else {
+            let notNull = '!!';
+            if (property.required) {
+                notNull = '';
+            }
+            const callMethod = this.languageDefinition.methodCall(constructObject, 'batchInsertOrUpdate', ['db', `${objectName}.${property.name}${notNull}`]);
+            if (property.required) {
                 return `\t\t${callMethod}`;
+            } else {
+                return `\t\t${this.languageDefinition.ifNotNullStatement(`${objectName}.${property.name}`, callMethod)}`;
             }
         }).join('\n');
+        if (methods.length > 1) {
+            return `\n${methods}\n\n`;
+        } else {
+            return '';
+        }
     }
 
-    getFieldsSeparatedByNative(fields: Array<DatabaseFieldHelper>): any {
-        const onlyNativeTypes: Array<DatabaseFieldHelper> = [];
-        const nonNativeTypes: Array<DatabaseFieldHelper> = [];
-
-        fields.forEach((property) => {
-            if (this.checkIfPropertyIsNativeType(property)) {
-                onlyNativeTypes.push(property);
-            } else {
-                if (property.fromClass) {
-                    property.fromClass.forEach((property) => {
-                        if (this.checkIfPropertyIsNativeType(property)) {
-                            onlyNativeTypes.push(property);
-                        } else {
-                            nonNativeTypes.push(property);
-                        }
-                    });
-                } else if (property.isArrayOfString || property.type.subtype) {
-                    nonNativeTypes.push(property);
-                } else {
-                    onlyNativeTypes.push(property);
-                }
-            }
-        });
-
-        return { onlyNativeTypes, nonNativeTypes };
+    checkIfPropertyIsNativeType(property: DefinitionPropertyHelper): boolean {
+        return property.type.isNative || property.type.isEnum || DatabaseFieldHelper.isArrayOfString(property.type);
     }
 
-    checkIfPropertyIsNativeType(property: DatabaseFieldHelper): boolean {
-        return (property.type.isNative && !property.type.subtype) || property.isArrayOfString || property.type.isEnum;
-    }
-
-    getFields(properties: Array<DatabaseFieldHelper>, objectName: string) {
+    getFields(properties: Array<DefinitionPropertyHelper>, objectName: string) {
         let fields = [`${this.className}.${DatabaseTableSchemaClassParser.tableNameProperty}`];
         fields = fields.concat(properties.filter((property) => {
-            return property.databaseFieldName !== 'id';
+            return DatabaseFieldHelper.getDatabaseNameForProperty(property) !== 'id';
         }).map((property) => {
-            return `${this.thisKeyword}.${property.fieldName}`;
+            return `${this.thisKeyword}.${DatabaseFieldHelper.getFieldNameForProperty(property)}`;
         }));
         
         fields = fields.concat(properties.filter((property) => {
-            return property.databaseFieldName !== 'id';
+            return DatabaseFieldHelper.getDatabaseNameForProperty(property) !== 'id';
         }).map((property) => {
-            if (property.isArrayOfString) {
-                const caller = new PropertyDefinition(objectName, new TypeDefinition(this.languageDefinition.stringKeyword));
-                const propertyName = new PropertyDefinition(property.propertyName, new TypeDefinition(this.languageDefinition.stringKeyword));
-                const callProperty = new PropertyDefinition(this.languageDefinition.callProperty(caller, propertyName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
-                return `${this.languageDefinition.methodCall(callProperty, 'join', 
-                    [this.languageDefinition.stringDeclaration(DatabaseTableSchemaClassParser.STRING_TO_ARRAY_SEPARATOR)])}`;
-            }
-            if (property.fromClass) {
-                return `${objectName}.${property.fromClass}.${property.propertyName}`;
-            } else if (!property.type.isNative && !property.type.subtype) {
-                return `${objectName}.${property.propertyName}.id`;
+            const definition = property.refersTo.definition;
+            if (definition) {
+                return `${objectName}.${definition.name}.${property.name}`;
+            } else if (!property.type.isNative && !property.type.subType) {
+                return `${objectName}.${property.name}.id`;
             } else {
-                return `${objectName}.${property.propertyName}`;
+                return `${objectName}.${property.name}`;
             }
         }));
         return fields;
@@ -621,7 +638,7 @@ ${databaseFields}
             returnCall);
     }
 
-    createReadListFromDbMethod(fields: Array<DatabaseFieldHelper>) {
+    createReadListFromDbMethod(fields: Array<DefinitionPropertyHelper>) {
         const listDeclaration = this.createListObject();
 
         const params = [];
@@ -664,7 +681,7 @@ ${databaseFields}
         return listDeclaration;
     }
 
-    createSelectMethod(fields: Array<DatabaseFieldHelper>) {
+    createSelectMethod(fields: Array<DefinitionPropertyHelper>) {
         const cursorDeclaration = this.languageDefinition.variableDeclaration(
             this.languageDefinition.variableKeyword,
             new TypeDefinition(DatabaseTableSchemaClassParser.cursor.type.name, false, null, false, true),
@@ -780,28 +797,25 @@ ${tryCatch}
             methodBody);
     }
 
-    createMethodsBasedOnDependencies(fields: Array<DatabaseFieldHelper>) {
+    createMethodsBasedOnDependencies(fields: Array<DefinitionPropertyHelper>) {
         const methods = this.definition.references.filter((reference) => {
-            return reference.relationship != RelationshipType.ONE_TO_ONE;
+            return reference.definition.needsTable;
         }).map((reference) => {
-            const fieldReference = fields.find((field) => {
-                return field.propertyName = reference.property.name;
-            });
-
             if (reference.relationship === RelationshipType.ONE_TO_N) {
                 return this.createMethodToSelectOneToN();
-            } else {
+            } else if (reference.relationship === RelationshipType.N_TO_ONE) {
+                const fieldReference = fields.find((field) => {
+                    return field.name === reference.property.name;
+                });
                 return this.createMethodToSelectNToOne(reference, fieldReference);
+            } else {
+                return this.createMethodToSelectNToOne(reference, reference.property);
             }
         });
 
-        var dups = new Map<Object, boolean>();
-        return methods.filter(function(method) {
-            var hash = JSON.stringify(method.valueOf());
-            var isDup = dups[hash];
-            dups[hash] = true;
-            return !isDup;
-        });
+        return ArrayUtils.removeDuplicates(methods.filter((method) => {
+            return method !== null;
+        }));
     }
 
     createMethodToSelectOneToN() {
@@ -845,11 +859,12 @@ ${tryCatch}
             returnCall);
     }
 
-    createMethodToSelectNToOne(reference: DefinitionReferenceHelper, fieldReference: DatabaseFieldHelper) {
+    createMethodToSelectNToOne(reference: DefinitionReferenceHelper, fieldReference: DefinitionPropertyHelper) {
         const methodName = `selectBy${reference.definition.name}Id`;
-        let sql = `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`;
-        sql += ` ${this.databaseLanguageDefinition.whereKeyword} ${fieldReference.databaseFieldName} = ${this.databaseLanguageDefinition.parameterKeyword}`;
 
+        let sql = `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`;
+        sql += ` ${this.databaseLanguageDefinition.whereKeyword} ${this.languageDefinition.stringReplacement} = ${this.databaseLanguageDefinition.parameterKeyword}`;
+        
         const sqlVariable = new PropertyDefinition(this.languageDefinition.stringDeclaration(sql), new TypeDefinition(this.languageDefinition.stringKeyword));
 
         const fieldForTableName = new PropertyDefinition(`${reference.definition.name}${DatabaseTableSchemaClassParser.classSufix}`,
@@ -858,7 +873,14 @@ ${tryCatch}
             new TypeDefinition(this.languageDefinition.stringKeyword));
         const tableName = this.languageDefinition.callProperty(fieldForTableName, fieldName, false);
 
-        const formatMethodCall = this.languageDefinition.methodCall(sqlVariable, 'format', [tableName]);
+        let field = null;
+        if (reference.relationship === RelationshipType.ONE_TO_ONE) {
+            field = `${this.className.name}.${DatabaseFieldHelper.ID}${DatabaseFieldHelper.FIELD_SUFIX}`;
+        } else {
+            field = `${this.className.name}.${DatabaseFieldHelper.getFieldNameForProperty(fieldReference)}`;
+        }
+
+        const formatMethodCall = this.languageDefinition.methodCall(sqlVariable, 'format', [tableName, field]);
 
         const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 
             'select',
@@ -880,103 +902,61 @@ class DatabaseFieldHelper {
     static FIELD_SUFIX = '_FIELD';
     static ID = 'ID';
 
-    databaseLanguageDefinition: SqliteLanguageDefinition;
-    languageDefinition: LanguageDefinition;
+    static getFieldNameForProperty(property: DefinitionPropertyHelper) {
+        return `${DatabaseFieldHelper.splitName(property).toUpperCase()}${this.FIELD_SUFIX}`;
+    }
 
-    type: TypeDefinition;
-    propertyName: string;
-    fieldName: string;
-    databaseFieldName: string;
-    databaseType: DatabaseTypeHelper;
-    searchById: boolean;
-    searchByDependencyId: boolean;
-    isArrayOfString: boolean;
-    fromClass: Array<DatabaseFieldHelper>;
-    required: boolean
-
-    constructor(databaseLanguageDefinition: SqliteLanguageDefinition, languageDefinition: LanguageDefinition, 
-            propertyName: string, type: TypeDefinition, required: boolean, fromClass: Array<DatabaseFieldHelper> = null) {
-        this.databaseLanguageDefinition = databaseLanguageDefinition;
-        this.languageDefinition = languageDefinition;
-        
-        this.type = type;
-        this.propertyName = propertyName;
-        let splittedName = StringUtils.splitNameWithUnderlines(this.propertyName);
-        this.fieldName = `${splittedName.toUpperCase()}${DatabaseFieldHelper.FIELD_SUFIX}`;
-        this.searchById = false;
-        this.searchByDependencyId = false;
-        this.isArrayOfString = false;
-
-        if (this.type.subtype && this.type.isEnum) {
-            this.databaseType = new DatabaseTypeHelper(this.type.subtype, languageDefinition, databaseLanguageDefinition);
+    private static splitName(property: DefinitionPropertyHelper) {
+        let splittedName = StringUtils.splitNameWithUnderlines(property.name);
+        if (property.refersTo && property.refersTo.definition) {
+            splittedName = `${StringUtils.splitNameWithUnderlines(property.refersTo.definition.name).toLowerCase()}_${splittedName}`;
         }
-        if (this.type.subtype && !this.type.subtype.isNative) { // Is an array of other model
-            this.searchById = true;
-            this.searchByDependencyId = false;
-            this.fieldName = null;
-            this.databaseFieldName = null;
-        } else if (!this.type.subtype && !this.type.isNative && !fromClass) { // Is not an array
-            this.searchById = false;
-            this.searchByDependencyId = true;
-            splittedName = `${splittedName}_ID`;
-            this.fieldName = `${splittedName.toUpperCase()}${DatabaseFieldHelper.FIELD_SUFIX}`;
-            this.databaseType = new DatabaseTypeHelper(new TypeDefinition(languageDefinition.stringKeyword), languageDefinition, databaseLanguageDefinition);
-        } else if (this.type.subtype && DatabaseFieldHelper.isArrayOfString(languageDefinition, this.type)) {
-            this.isArrayOfString = true;
-            this.databaseType = new DatabaseTypeHelper(new TypeDefinition(languageDefinition.stringKeyword), languageDefinition, databaseLanguageDefinition);
-        } else {
-            if (fromClass) {
-                this.fromClass = fromClass;
-            }
-            this.databaseType = new DatabaseTypeHelper(this.type, languageDefinition, databaseLanguageDefinition);
+        if (!property.type.subType && !property.type.isNative) {
+            splittedName = `${splittedName}_${this.ID}`;
         }
-
-        this.databaseFieldName = splittedName.toLowerCase();
-        this.required = required;
+        return splittedName;
     }
 
-    static isArrayOfString(languageDefinition: LanguageDefinition, type: TypeDefinition) {
-        return type.name.indexOf(languageDefinition.arrayKeyword) > - 1 && type.subtype.name === languageDefinition.stringKeyword;
+    static getDatabaseNameForProperty(property: DefinitionPropertyHelper) {
+        return DatabaseFieldHelper.splitName(property).toLowerCase()
     }
 
-    toProperty() {
-        return new PropertyDefinition(this.fieldName, 
-            new TypeDefinition(this.languageDefinition.stringKeyword, true, null, false, !this.required),
-            this.languageDefinition.stringDeclaration(this.databaseFieldName),
-            [this.languageDefinition.staticKeyword]);
+    static isArrayOfString(type: DefinitionTypeHelper) {
+        return type.isArray() && type.subType.name === YamlType.TYPE_STRING;
     }
 
-    getDatabaseFieldProperties() {
+    static toProperty(property: DefinitionPropertyHelper, languageDefinition: LanguageDefinition) {
+        return new PropertyDefinition(this.getFieldNameForProperty(property), 
+            new TypeDefinition(languageDefinition.stringKeyword, true, null, false, false),
+            languageDefinition.stringDeclaration(this.getDatabaseNameForProperty(property)),
+            [languageDefinition.staticKeyword]);
+    }
+
+    static getDatabaseFieldProperties(property: DefinitionPropertyHelper, databaseLanguageDefinition: SqliteLanguageDefinition) {
         let properties = [];
-        if (this.propertyName === 'id') {
-            properties.push(this.databaseLanguageDefinition.notNullKeyword);
-            properties.push(this.databaseLanguageDefinition.primaryKeyKeyword);
-        } else if (this.required) {
-            properties.push(this.databaseLanguageDefinition.notNullKeyword);
+        if (property.name === 'id') {
+            properties.push(databaseLanguageDefinition.notNullKeyword);
+            properties.push(databaseLanguageDefinition.primaryKeyKeyword);
+        } else if (property.required) {
+            properties.push(databaseLanguageDefinition.notNullKeyword);
         }
 
         return properties.join(' ');
     }
-}
 
-class DatabaseTypeHelper {
-    name: string;
-    type: TypeDefinition;
-
-    constructor(type: TypeDefinition, languageDefinition: LanguageDefinition, databaseLanguageDefinition: SqliteLanguageDefinition) {
-        this.type = type;
+    static getDatabaseType(type: DefinitionTypeHelper, databaseLanguageDefinition: SqliteLanguageDefinition) {
         if (type.isEnum) {
-            this.name = databaseLanguageDefinition.stringKeyword;
-        } else if (type.name === languageDefinition.stringKeyword) {
-            this.name = databaseLanguageDefinition.stringKeyword;
-        } else if (type.name === languageDefinition.numberKeyword) {
-            this.name = databaseLanguageDefinition.numberKeyword;
-        } else if (type.name === languageDefinition.intKeyword) {
-            this.name = databaseLanguageDefinition.integerKeyword;
-        } else if (type.name === languageDefinition.booleanKeyword) {
-            this.name = databaseLanguageDefinition.booleanKeyword;
+            return databaseLanguageDefinition.stringKeyword;
+        } else if (type.name === 'string') {
+            return databaseLanguageDefinition.stringKeyword;
+        } else if (type.name === 'number') {
+            return databaseLanguageDefinition.numberKeyword;
+        } else if (type.name === 'integer') {
+            return databaseLanguageDefinition.integerKeyword;
+        } else if (type.name === 'boolean') {
+            return databaseLanguageDefinition.booleanKeyword;
         } else {
-            this.name = null;
+            return null;
         }
     }
 }

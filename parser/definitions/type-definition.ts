@@ -4,17 +4,17 @@ import PrintableLanguageElements from "./printable-language-elements";
 class TypeDefinition implements PrintableLanguageElements {
     package: string;
     name: string;
-    subtype: TypeDefinition;
+    subType: TypeDefinition;
     isNative: boolean;
     isEnum: boolean;
     nullable: boolean;
 
-    constructor(name: string, isNative: boolean = false, subtype: TypeDefinition = null, isEnum: boolean = false, nullable: boolean = false) {
+    constructor(name: string, isNative: boolean = false, subType: TypeDefinition = null, isEnum: boolean = false, nullable: boolean = false) {
         if (!name) {
             throw new Error('You must define a name');
         }
         this.name = name;
-        this.subtype = subtype;
+        this.subType = subType;
         this.isNative = isNative;
         this.isEnum = isEnum;
         this.nullable = nullable;
@@ -24,13 +24,13 @@ class TypeDefinition implements PrintableLanguageElements {
         return languageDefinition.printType(this);
     }
 
-    static typeBySplittingPackageAndName(packageString: string, subtypeIfNeeded: string): TypeDefinition {
+    static typeBySplittingPackageAndName(packageString: string, subTypeIfNeeded: string): TypeDefinition {
         const names = packageString.split('.');
         let name = names[names.length - 1];
         let subtype = null;
         let newPackageString = packageString;
         if (name.indexOf('<$this>') > -1) {
-            subtype = new TypeDefinition(subtypeIfNeeded, false, null, false);
+            subtype = new TypeDefinition(subTypeIfNeeded, false, null, false);
             name = name.substr(0, name.indexOf('<$this>'));
             newPackageString = packageString.substr(0, packageString.indexOf('<$this>'));
         }

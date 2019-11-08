@@ -76,6 +76,13 @@ class YamlProperty {
 }
 
 class YamlType {
+    static TYPE_STRING = 'string';
+    static TYPE_NUMBER = 'number';
+    static TYPE_INTEGER = 'integer';
+    static TYPE_BOOLEAN = 'boolean';
+    static TYPE_OBJECT = 'object';
+    static TYPE_ARRAY = 'array';
+
     name: string;
     items: YamlType;
     isEnum: boolean;

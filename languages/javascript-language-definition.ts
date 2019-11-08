@@ -83,8 +83,8 @@ ${body}
     }
 
     printType(type: TypeDefinition): string {
-        if (type.subtype) {
-            return `${type.name}<${type.subtype.print(this)}>`;
+        if (type.subType) {
+            return `${type.name}<${type.subType.print(this)}>`;
         } else {
             return  `${type.name}`;
         }

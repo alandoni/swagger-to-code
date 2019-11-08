@@ -9,6 +9,7 @@ import EnumDefinition from "./definitions/enum-definition";
 import MethodDefinition from "./definitions/method-definition";
 import Parser from "./parser-interface";
 import { ClassSettings } from "../configuration";
+import { YamlType } from "./swagger-objects-representation/definition";
 
 export default class ModelClassParser implements Parser {
     languageDefinition: LanguageDefinition;
@@ -199,22 +200,22 @@ export default class ModelClassParser implements Parser {
             isEnum = true;
         }
 
-        if (type.name === 'string') {
+        if (type.name === YamlType.TYPE_STRING) {
             return new TypeDefinition(languageDefinition.stringKeyword, true, null, isEnum, !required);
         }
-        if (type.name === 'number') {
+        if (type.name === YamlType.TYPE_NUMBER) {
             return new TypeDefinition(languageDefinition.numberKeyword, true, null, isEnum, !required);
         }
-        if (type.name === 'integer') {
+        if (type.name === YamlType.TYPE_INTEGER) {
             return new TypeDefinition(languageDefinition.intKeyword, true, null, isEnum, !required);
         }
-        if (type.name === 'boolean') {
+        if (type.name === YamlType.TYPE_BOOLEAN) {
             return new TypeDefinition(languageDefinition.booleanKeyword, true, null, isEnum, !required);
         }
-        if (type.name === 'array') {
-            return new TypeDefinition(languageDefinition.arrayKeyword, true, this.getPropertyType(languageDefinition, type.subType, true), isEnum, !required);
+        if (type.name === YamlType.TYPE_ARRAY) {
+            return new TypeDefinition(languageDefinition.arrayKeyword, false, this.getPropertyType(languageDefinition, type.subType, true), isEnum, !required);
         }
-        if (type.name === 'object') {
+        if (type.name === YamlType.TYPE_OBJECT) {
             return new TypeDefinition(languageDefinition.mapKeyword, false, null, isEnum, !required);
         }
 

@@ -129,8 +129,8 @@ ${body}
             nullable = '?';
         }
         let result = '';
-        if (type.subtype && !type.isEnum) {
-            result = `${type.name}<${type.subtype.print(this)}>${nullable}`;
+        if (type.subType && !type.isEnum) {
+            result = `${type.name}<${type.subType.print(this)}>${nullable}`;
         } else {
             result =  `${type.name}${nullable}`;
         }

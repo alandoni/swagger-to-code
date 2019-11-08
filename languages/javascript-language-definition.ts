@@ -13,6 +13,8 @@ class JavascriptLanguageDefinition extends LanguageDefinition {
     isTypeSafeLanguage = false;
     thisKeyword = 'this';
     constKeyword = 'const';
+    staticConstKeyword = '';
+    shouldInsertClassNameForStaticConstsInTheSameClass = true;
     variableKeyword = 'let';
     nullKeyword = 'null';
     anyTypeKeyword = '';

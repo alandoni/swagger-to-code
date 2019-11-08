@@ -12,6 +12,8 @@ abstract class LanguageDefinition {
     thisKeyword: string;
     constKeyword: string;
     variableKeyword: string;
+    staticConstKeyword: string;
+    shouldInsertClassNameForStaticConstsInTheSameClass: boolean;
     nullKeyword: string;
     anyTypeKeyword: string;
     intKeyword: string;

@@ -8,7 +8,7 @@ import StringUtils from "../string-utils";
 import ClassDefinition from "./definitions/class-definition";
 import MethodDefinition from "./definitions/method-definition";
 import Parser from "./parser-interface";
-import { LanguageSettings, TypeOfClass, ClassSettings } from "../configuration";
+import { LanguageSettings, TypeOfClass } from "../configuration";
 import Languages from "../languages/languages";
 import KotlinClassDefinition from "./definitions/kotlin-class-definition";
 import { YamlType } from "./swagger-objects-representation/definition";
@@ -51,13 +51,13 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             return TypeDefinition.typeBySplittingPackageAndName(interfaceString, className);
         });
 
-        const dependencies = this.getDependencies(inherits, implementsInterfaces, classSettings);
+        const dependencies = this.getDependencies(inherits, implementsInterfaces);
         
         let tableNameString = new PropertyDefinition(
             DatabaseTableSchemaClassParser.tableNameProperty,
             new TypeDefinition(this.languageDefinition.stringKeyword),
             this.languageDefinition.stringDeclaration(StringUtils.splitNameWithUnderlines(className).toLowerCase()),
-            [this.languageDefinition.staticKeyword]);
+            [this.languageDefinition.staticKeyword, this.languageDefinition.staticConstKeyword]);
 
         const methods = [
             this.createCreateTableMethod(this.definition.properties),
@@ -91,7 +91,15 @@ export default class DatabaseTableSchemaClassParser implements Parser {
         return tableClass;
     }
 
-    getDependencies(inherits: TypeDefinition, implementsInterfaces: Array<TypeDefinition>, classSettings: ClassSettings) {
+    getClassNameForStaticConsts(): PropertyDefinition {
+        if (this.languageDefinition.shouldInsertClassNameForStaticConstsInTheSameClass) {
+            return this.className;
+        } else {
+            return null;
+        }
+    }
+
+    getDependencies(inherits: TypeDefinition, implementsInterfaces: Array<TypeDefinition>) {
         const nativeDependencies = [
             'android.database.sqlite.SQLiteDatabase',
             'android.database.Cursor',
@@ -105,15 +113,7 @@ export default class DatabaseTableSchemaClassParser implements Parser {
             inherits ? inherits.package : null,
             ...implementsInterfaces.map((interfaceType) => {
                 return interfaceType.package;
-            }),
-            ...this.definition.references.map((dependency) => {
-                if (dependency.definition.needsTable) {
-                    return `${classSettings.package}.${dependency.definition.name}${DatabaseTableSchemaClassParser.classSufix}`;
-                }
-                return null;
-            }).filter((dependency) => {
-                return dependency != null;
-            }),
+            })
         ].filter((dependency) => {
             return dependency !== null;
         });
@@ -180,11 +180,11 @@ export default class DatabaseTableSchemaClassParser implements Parser {
 
         const parameters = fields.map((field) => {
             const fieldName = new PropertyDefinition(DatabaseFieldHelper.getFieldNameForProperty(field), new TypeDefinition(this.languageDefinition.stringKeyword));
-            return `\t\t${this.languageDefinition.callProperty(this.className, fieldName, false)}`;
+            return `\t\t${this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false)}`;
         });
 
         const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const propertyCall = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const propertyCall = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         const tablePlusParameters = [propertyCall, ...parameters];
         
         const tableString = this.languageDefinition.stringDeclaration(`${this.databaseLanguageDefinition.createTable} \`${this.languageDefinition.stringReplacement}\` (
@@ -248,7 +248,7 @@ ${databaseFields}
 
     readFromDatabaseAccordingToFieldType(className: string, field: DefinitionPropertyHelper): string {
         const fieldName = new PropertyDefinition(DatabaseFieldHelper.getFieldNameForProperty(field), new TypeDefinition(this.languageDefinition.stringKeyword));
-        const columnName = new PropertyDefinition(this.languageDefinition.callProperty(this.className, fieldName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
+        const columnName = new PropertyDefinition(this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false), new TypeDefinition(this.languageDefinition.stringKeyword));
         const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName.name]);
 
         let typeName = field.type.name;
@@ -301,7 +301,7 @@ ${databaseFields}
         }
 
         const fieldName = new PropertyDefinition(DatabaseFieldHelper.getFieldNameForProperty(field), new TypeDefinition(this.languageDefinition.stringKeyword));
-        const columnName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const columnName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName]);
 
         const otherDefinition = field.refersTo && field.refersTo.definition;
@@ -321,7 +321,7 @@ ${databaseFields}
                 new TypeDefinition(this.definition.name));
 
             const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
-            const columnName = this.languageDefinition.callProperty(this.className, fieldName, false);
+            const columnName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
 
             const methodGetIndexOfColumn = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getColumnIndex', [columnName]);
             let getId = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.cursor, 'getString', [methodGetIndexOfColumn]);
@@ -378,7 +378,7 @@ ${databaseFields}
                 values, 
                 'put', 
                 [
-                    this.languageDefinition.callProperty(this.className, fieldName, false), 
+                    this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false), 
                     `${entry.value}`
                 ]);
             const field = entry.field;
@@ -396,7 +396,7 @@ ${databaseFields}
             this.languageDefinition.constructObject(values.type, null));
 
         const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const tableName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         const callExecSqlMethod = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'insertWithOnConflict', [ tableName, this.languageDefinition.nullKeyword, 'values', 'SQLiteDatabase.CONFLICT_REPLACE']);
         let methodString = `\t\t${valuesVariable}\n`;
         methodString += `${contentValues}\n`;
@@ -551,7 +551,7 @@ ${databaseFields}
     }
 
     getFields(properties: Array<DefinitionPropertyHelper>, objectName: string) {
-        let fields = [`${this.className}.${DatabaseTableSchemaClassParser.tableNameProperty}`];
+        let fields = [`${this.getClassNameForStaticConsts()}.${DatabaseTableSchemaClassParser.tableNameProperty}`];
         fields = fields.concat(properties.filter((property) => {
             return DatabaseFieldHelper.getDatabaseNameForProperty(property) !== 'id';
         }).map((property) => {
@@ -602,10 +602,10 @@ ${databaseFields}
     createDeleteMethodWithConvenienceMethod() {
         const id = new PropertyDefinition('id', new TypeDefinition(this.languageDefinition.stringKeyword))
         const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const tableName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         
         const dbExecCall = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'delete', 
-            [tableName, this.languageDefinition.stringDeclaration(`${this.className}.ID_FIELD = ?`), 
+            [tableName, this.languageDefinition.stringDeclaration(`${this.getClassNameForStaticConsts()}.ID_FIELD = ?`), 
             this.languageDefinition.methodCall(null, 'arrayOf', [this.languageDefinition.methodCall(id, 'toString', null)])]);
         const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
         return new MethodDefinition('deleteById',
@@ -626,7 +626,7 @@ ${databaseFields}
         );
         const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
         const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', 
-            [`${this.className}.${DatabaseTableSchemaClassParser.tableNameProperty}`, `${this.className}.ID_FIELD`]);
+            [`${this.getClassNameForStaticConsts()}.${DatabaseTableSchemaClassParser.tableNameProperty}`, `${this.getClassNameForStaticConsts()}.ID_FIELD`]);
 
         const dbExecCall = this.languageDefinition.methodCall(DatabaseTableSchemaClassParser.databaseObject, 'execSQL', [formatMethodCall, 'id']);
         const returnCall = `\t\t${this.languageDefinition.returnDeclaration(dbExecCall)}`;
@@ -744,7 +744,7 @@ ${tryCatch}
             `${this.databaseLanguageDefinition.selectAllFieldsKeyword} ${this.databaseLanguageDefinition.fromKeyword} ${this.languageDefinition.stringReplacement}`
         );
         const fieldName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableName = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const tableName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         
         const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
         const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', [tableName]);
@@ -767,17 +767,17 @@ ${tryCatch}
         );
         
         const fieldForTableName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableName = this.languageDefinition.callProperty(this.className, fieldForTableName, false);
+        const tableName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldForTableName, false);
 
         const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableNameForField = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const tableNameForField = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         
         const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
         const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', [tableName, tableNameForField]);
 
         const idParam = new ParameterDefinition('id', new TypeDefinition(this.languageDefinition.stringKeyword));
 
-        const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 'select', [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall, this.languageDefinition.methodCall(idParam, 'toString', null)]);
+        const dbExecCall = this.languageDefinition.methodCall(this.thisKeyword, 'select', [DatabaseTableSchemaClassParser.databaseObject.name, formatMethodCall, idParam.name]);
 
         const listDeclaration = this.languageDefinition.variableDeclaration(
             this.languageDefinition.constKeyword, 
@@ -839,10 +839,10 @@ ${tryCatch}
         const sqlStringVariable = new PropertyDefinition(sql, new TypeDefinition(this.languageDefinition.stringKeyword));
         
         const fieldForTableName = new PropertyDefinition(DatabaseTableSchemaClassParser.tableNameProperty, new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableName = this.languageDefinition.callProperty(this.className, fieldForTableName, false);
+        const tableName = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldForTableName, false);
 
         const fieldName = new PropertyDefinition('ID_FIELD', new TypeDefinition(this.languageDefinition.stringKeyword));
-        const tableNameForField = this.languageDefinition.callProperty(this.className, fieldName, false);
+        const tableNameForField = this.languageDefinition.callProperty(this.getClassNameForStaticConsts(), fieldName, false);
         
         const formatMethodCall = this.languageDefinition.methodCall(sqlStringVariable, 'format', 
             [tableName, tableNameForField, 'interrogations']);
@@ -874,11 +874,14 @@ ${tryCatch}
             new TypeDefinition(this.languageDefinition.stringKeyword));
         const tableName = this.languageDefinition.callProperty(fieldForTableName, fieldName, false);
 
-        let field = null;
+        let field = '';
+        if (this.languageDefinition.shouldInsertClassNameForStaticConstsInTheSameClass) {
+            field = `${this.className.name}.`;
+        }
         if (reference.relationship === RelationshipType.ONE_TO_ONE) {
-            field = `${this.className.name}.${DatabaseFieldHelper.ID}${DatabaseFieldHelper.FIELD_SUFIX}`;
+            field = `${field}${DatabaseFieldHelper.ID}${DatabaseFieldHelper.FIELD_SUFIX}`;
         } else {
-            field = `${this.className.name}.${DatabaseFieldHelper.getFieldNameForProperty(fieldReference)}`;
+            field = `${field}${DatabaseFieldHelper.getFieldNameForProperty(fieldReference)}`;
         }
 
         const formatMethodCall = this.languageDefinition.methodCall(sqlVariable, 'format', [tableName, field]);
@@ -930,7 +933,7 @@ class DatabaseFieldHelper {
         return new PropertyDefinition(this.getFieldNameForProperty(property), 
             new TypeDefinition(languageDefinition.stringKeyword, true, null, false, false),
             languageDefinition.stringDeclaration(this.getDatabaseNameForProperty(property)),
-            [languageDefinition.staticKeyword]);
+            [languageDefinition.staticKeyword, languageDefinition.staticConstKeyword]);
     }
 
     static getDatabaseFieldProperties(property: DefinitionPropertyHelper, databaseLanguageDefinition: SqliteLanguageDefinition) {

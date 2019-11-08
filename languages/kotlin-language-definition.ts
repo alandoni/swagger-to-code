@@ -12,6 +12,8 @@ class KotlinLanguageDefinition extends LanguageDefinition {
     isTypeSafeLanguage = true;
     thisKeyword = 'this';
     constKeyword = 'val';
+    staticConstKeyword = 'const';
+    shouldInsertClassNameForStaticConstsInTheSameClass = false;
     variableKeyword = 'var';
     nullKeyword = 'null';
     anyTypeKeyword = 'Any';
@@ -306,6 +308,9 @@ ${body}
     }
 
     callProperty(caller: PropertyDefinition, property: PropertyDefinition, insertNullable: boolean = false): string {
+        if (!caller) {
+            return property.name;
+        }
         return `${this.printPropertyValue(caller, insertNullable)}.${property.name}`;
     }
 

@@ -1,4 +1,4 @@
-import { DefinitionPropertyHelper, DefinitionTypeHelper } from "../language-parser";
+import { DefinitionPropertyHelper, DefinitionTypeHelper } from "../yaml-definition-to-definition-helper-converter";
 
 class YamlDefinition {
     name: string;
@@ -18,7 +18,7 @@ class YamlDefinition {
         name = definition[0];
         properties = definition[1].properties ? YamlProperty.fromObject(definition[1].properties) : null;
         requiredProperties = definition[1].required;
-        type = new YamlType(definition[1].type || definition[1].$ref, null);
+        type = YamlType.fromObject(definition[1]);
         return new YamlDefinition(name, type, properties, requiredProperties);
     }
 }
@@ -59,9 +59,7 @@ class YamlProperty {
             if (property[1].items && property[1].items.properties) {
                 type = new YamlTypeWithObject(property[1].name, property[1].items.properties, property[1].items.required);
             } else {
-                const typeName = property[1].type || property[1].$ref;
-                const typeItem = property[1].items ? new YamlType(property[1].items.type || property[1].items.$ref, null, !!property[1].items.enum) : null;
-                type = new YamlType(typeName, typeItem, !!property[1].enum);
+                type = YamlType.fromObject(property[1]);
             }
 
             const defaultValue = property[1].default;
@@ -99,6 +97,12 @@ class YamlType {
     static fromDefinitionTypeHelper(type: DefinitionTypeHelper) : YamlType {
         return new YamlType(type.name, type.subType ? YamlType.fromDefinitionTypeHelper(type.subType) : null, type.isEnum);
     }
+
+    static fromObject(object: any) {
+        const typeName = object.type || object.$ref;
+        const typeItem = object.items ? new YamlType(object.items.type || object.items.$ref, null, !!object.items.enum) : null;
+        return new YamlType(typeName, typeItem, !!object.enum);
+    }
 }
 
 class YamlTypeWithObject extends YamlType {
@@ -112,9 +116,97 @@ class YamlTypeWithObject extends YamlType {
     }
 }
 
+class YamlTag {
+    name: string;
+
+    constructor(name: string) {
+        this.name = name;
+    }
+}
+
+class YamlPath {
+    static METHOD_GET = 'GET';
+    static METHOD_POST = 'POST';
+    static METHOD_PUT = 'PUT';
+    static METHOD_DELETE = 'DELETE';
+
+    path: string;
+    method: string;
+    tags: Array<YamlTag>;
+    parameters: Array<YamlPathParameter>;
+    responses: Array<YamlPathResponse>;
+
+    constructor(path: string, method: string, tags: Array<YamlTag>, parameters: Array<YamlPathParameter>, responses: Array<YamlPathResponse>) {
+        this.path = path;
+
+        switch (method) {
+            case 'get':
+                this.method = YamlPath.METHOD_GET;
+                break;
+            case 'put':
+                    this.method = YamlPath.METHOD_PUT;
+                    break;
+            case 'delete':
+                    this.method = YamlPath.METHOD_DELETE;
+                    break;
+            default:
+                this.method = YamlPath.METHOD_POST;
+                break;
+        }
+        this.tags = tags;
+        this.parameters = parameters;
+        this.responses = responses;
+    }
+}
+
+class YamlPathParameter {
+    static TYPE_BODY = 'TYPE_BODY';
+    static TYPE_QUERY = 'TYPE_QUERY';
+    static TYPE_PATH = 'TYPE_PATH';
+
+    type: string;
+    name: string;
+    required: boolean;
+    schema: YamlType;
+
+    constructor(type: string, name: string, required: boolean, schema: YamlType) {
+        this.name = name;
+        this.required = required;
+        this.schema = schema;
+
+        switch(type) {
+            case 'body':
+                this.type = YamlPathParameter.TYPE_BODY;
+                this.name = 'body';
+                break;
+            case 'query':
+                this.type = YamlPathParameter.TYPE_QUERY;
+                break;
+            default:
+                this.type = YamlPathParameter.TYPE_PATH;
+        }
+    }
+}
+
+class YamlPathResponse {
+    statusCode: number;
+    description: string;
+    schema: YamlType;
+
+    constructor(statusCode: number, description: string, schema: YamlType) {
+        this.statusCode = statusCode;
+        this.description = description;
+        this.schema = schema;
+    }
+}
+
 export {
     YamlDefinition,
     YamlProperty,
     YamlType,
     YamlTypeWithObject,
+    YamlTag,
+    YamlPath,
+    YamlPathParameter,
+    YamlPathResponse,
 };

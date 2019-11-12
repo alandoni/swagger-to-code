@@ -1,6 +1,6 @@
 import LanguageDefinition from "../languages/language-definition";
 import SqliteLanguageDefinition from "../languages/sqlite-language-definition";
-import { DefinitionHelper, DefinitionReferenceHelper, RelationshipType, DefinitionPropertyHelper, DefinitionTypeHelper } from "./language-parser";
+import { DefinitionHelper, DefinitionReferenceHelper, RelationshipType, DefinitionPropertyHelper, DefinitionTypeHelper } from "./yaml-definition-to-definition-helper-converter";
 import ParameterDefinition from "./definitions/parameter-definition";
 import TypeDefinition from "./definitions/type-definition";
 import PropertyDefinition from "./definitions/property-definition";

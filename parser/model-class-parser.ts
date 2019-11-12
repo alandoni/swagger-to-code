@@ -1,5 +1,5 @@
 import LanguageDefinition from "../languages/language-definition";
-import { DefinitionHelper, DefinitionTypeHelper, DefinitionPropertyHelper } from "./language-parser";
+import { DefinitionHelper, DefinitionTypeHelper, DefinitionPropertyHelper } from "./yaml-definition-to-definition-helper-converter";
 import ClassDefinition from "./definitions/class-definition";
 import ConstructorDefinition from "./definitions/constructor-definition";
 import ParameterDefinition from "./definitions/parameter-definition";

@@ -1,6 +1,6 @@
 import { LanguageSettings } from '../configuration';
 import LanguageDefinition from '../languages/language-definition';
-import { YamlPath, YamlTag, YamlPathParameter, YamlPathResponse, YamlType } from './swagger-objects-representation/definition';
+import { YamlPath, YamlTag, YamlPathParameter, YamlPathResponse, YamlType, YamlDefinition } from './swagger-objects-representation/definition';
 import { DefinitionHelper } from './yaml-definition-to-definition-helper-converter';
 
 export default class YamlPathsToApiHelperConverter {
@@ -70,11 +70,11 @@ class PathHelper {
     url: string;
     method: string;
     tag: YamlTag;
-    requestObject: DefinitionHelper;
-    successResponseObject: DefinitionHelper;
-    failureResponseObject: DefinitionHelper;
+    requestObject: YamlDefinition;
+    successResponseObject: YamlDefinition;
+    failureResponseObject: Array<YamlDefinition>;
 
-    constructor(name: string, url: string, method: string, tag: YamlTag, requestObject: DefinitionHelper, successResponseObject: DefinitionHelper, failureResponseObject: DefinitionHelper) {
+    constructor(name: string, url: string, method: string, tag: YamlTag, requestObject: YamlDefinition, successResponseObject: YamlDefinition, failureResponseObject: Array<YamlDefinition>) {
         this.name = name;
         this.url = url;
         this.method = method;
@@ -90,3 +90,5 @@ class PathHelper {
         return new PathHelper(name, path.path, path.method, path.tags[0], null, null, null);
     }
 }
+
+export { PathHelper };

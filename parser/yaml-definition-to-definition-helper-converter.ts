@@ -216,7 +216,7 @@ class DefinitionTypeHelper {
     isNative: boolean;
 
     constructor(name: string, subType: DefinitionTypeHelper = null, isEnum: boolean = false) {
-        this.name = this.getTypeReferingToAnotherClass(name);
+        this.name = DefinitionTypeHelper.getTypeReferingToAnotherClass(name);
         this.subType = subType;
         this.isEnum = isEnum;
 
@@ -233,7 +233,7 @@ class DefinitionTypeHelper {
         }
     }
 
-    getTypeReferingToAnotherClass(type: string): string {
+    static getTypeReferingToAnotherClass(type: string): string {
         const definitionsString = '#/definitions/';
         const definitionIndex = type.indexOf(definitionsString);
         if (definitionIndex > -1) {

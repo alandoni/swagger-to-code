@@ -25,12 +25,14 @@ export default class LanguageParser {
 
         const classes = [];
 
-        const definitions = new YamlDefinitionToDefinitionHelperConverter().convert(object, this.languageDefinition, this.configuration);
+        const definitionConverter = new YamlDefinitionToDefinitionHelperConverter();
+        definitionConverter.convert(object, this.languageDefinition, this.configuration);
         const yamlPathsConverter = new YamlPathsToApiHelperConverter()
-        yamlPathsConverter.convert(object, this.languageDefinition, this.configuration);
+        const paths = yamlPathsConverter.convert(object, definitionConverter.preparedDefinitions, this.languageDefinition, this.configuration);
+        console.log(paths);
         yamlPathsConverter.convertTags(object.tags);
 
-        definitions.forEach((definition) => {
+        definitionConverter.definitions.forEach((definition) => {
             const modelParser = new ModelClassParser(
                 this.languageDefinition, 
                 definition, 

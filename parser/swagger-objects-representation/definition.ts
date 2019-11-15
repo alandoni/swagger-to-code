@@ -30,7 +30,7 @@ class YamlProperty {
     enum: Array<string>;
     properties: Array<YamlProperty>;
 
-    constructor(name: string, type: YamlType, properties: Array<YamlProperty>, defaultValue: string, enumValues: Array<string>) {
+    constructor(name: string, type: YamlType, properties: Array<YamlProperty> = null, defaultValue: string = null, enumValues: Array<string> = null) {
         this.name = name;
         this.type = type;
         this.defaultValue = defaultValue;
@@ -85,11 +85,11 @@ class YamlType {
     items: YamlType;
     isEnum: boolean;
 
-    constructor(name: string, items: YamlType, isEnum: boolean = false) {
+    constructor(name: string, items: YamlType = null, isEnum: boolean = false) {
         if (!name) {
             throw new Error('You must define a name');
         }
-        this.name = name;
+        this.name = YamlType.getTypeReferingToAnotherClass(name);
         this.items = items;
         this.isEnum = isEnum;
     }
@@ -102,6 +102,15 @@ class YamlType {
         const typeName = object.type || object.$ref;
         const typeItem = object.items ? new YamlType(object.items.type || object.items.$ref, null, !!object.items.enum) : null;
         return new YamlType(typeName, typeItem, !!object.enum);
+    }
+
+    static getTypeReferingToAnotherClass(type: string): string {
+        const definitionsString = '#/definitions/';
+        const definitionIndex = type.indexOf(definitionsString);
+        if (definitionIndex > -1) {
+            return type.substr(definitionIndex + definitionsString.length);
+        }
+        return type;
     }
 }
 
@@ -167,9 +176,9 @@ class YamlPathParameter {
     type: string;
     name: string;
     required: boolean;
-    schema: YamlType;
+    schema: YamlDefinition;
 
-    constructor(type: string, name: string, required: boolean, schema: YamlType) {
+    constructor(type: string, name: string, required: boolean, schema: YamlDefinition) {
         this.name = name;
         this.required = required;
         this.schema = schema;
@@ -191,9 +200,9 @@ class YamlPathParameter {
 class YamlPathResponse {
     statusCode: number;
     description: string;
-    schema: YamlType;
+    schema: YamlDefinition;
 
-    constructor(statusCode: number, description: string, schema: YamlType) {
+    constructor(statusCode: number, description: string, schema: YamlDefinition) {
         this.statusCode = statusCode;
         this.description = description;
         this.schema = schema;

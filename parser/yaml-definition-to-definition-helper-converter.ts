@@ -1,7 +1,7 @@
 import LanguageDefinition from '../languages/language-definition';
 
 import ModelClassParser from './model-class-parser';
-import { YamlDefinition, YamlProperty, YamlType } from './swagger-objects-representation/definition';
+import { YamlDefinition, YamlProperty, YamlType, YamlTag } from './swagger-objects-representation/definition';
 import { LanguageSettings } from '../configuration';
 
 import TypeDefinition from './definitions/type-definition';
@@ -19,7 +19,7 @@ export default class YamlDefinitionToDefinitionHelperConverter {
         this.preparedDefinitions = this.prepareDefinitions(yamlDefinitions);
 
         this.createDefinitionsFromProperties(this.definitions);
-        this.prepareReferences();
+        this.prepareReferences(this.definitions);
 
         return this.definitions;
     }
@@ -51,8 +51,8 @@ export default class YamlDefinitionToDefinitionHelperConverter {
         return preparedDefinitions;
     }
 
-    prepareReferences() {
-        this.definitions.filter((definition) => {
+    prepareReferences(definitions: Array<DefinitionHelper>) {
+        definitions.filter((definition) => {
             definition.properties.filter((property: DefinitionPropertyHelper) => {
                 const refersTo = property.type.subType && this.preparedDefinitions[property.type.subType.name];
                 return property.type.name === 'array' && refersTo && refersTo.needsTable;
@@ -88,8 +88,7 @@ export default class YamlDefinitionToDefinitionHelperConverter {
 
     doesDefinitionUseFieldsAsPartOfTheTable(definition: DefinitionHelper): boolean {
         return definition.properties.filter((property) => {
-            return 
-                !ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required).isNative ||
+            return !ModelClassParser.getPropertyType(this.languageDefinition, property.type, property.required).isNative ||
                 !YamlDefinitionToDefinitionHelperConverter.doesDefinitionNeedTable(definition);
         }).length > 0;
     }
@@ -150,6 +149,7 @@ class DefinitionHelper {
     requiredProperties: Array<string>;
     references: Array<DefinitionReferenceHelper>;
     useFieldsAsPartOfTheSameTable: boolean;
+    tag: YamlTag;
 
     constructor(name: string, properties: Array<YamlProperty>, requiredProperties: Array<string>) {
         this.name = name;
@@ -216,7 +216,7 @@ class DefinitionTypeHelper {
     isNative: boolean;
 
     constructor(name: string, subType: DefinitionTypeHelper = null, isEnum: boolean = false) {
-        this.name = DefinitionTypeHelper.getTypeReferingToAnotherClass(name);
+        this.name = name;
         this.subType = subType;
         this.isEnum = isEnum;
 
@@ -231,16 +231,7 @@ class DefinitionTypeHelper {
                 this.isNative = false;
                 break;   
         }
-    }
-
-    static getTypeReferingToAnotherClass(type: string): string {
-        const definitionsString = '#/definitions/';
-        const definitionIndex = type.indexOf(definitionsString);
-        if (definitionIndex > -1) {
-            return type.substr(definitionIndex + definitionsString.length);
-        }
-        return type;
-    }
+    }   
 
     isArray() {
         return this.name.indexOf(YamlType.TYPE_ARRAY) > -1;
@@ -272,7 +263,6 @@ class DefinitionReferenceHelper {
         this.relationship = relationship;
     }
 }
-
 
 export {
     DefinitionHelper,

@@ -20,6 +20,10 @@ class StringUtils {
             });
         });
     }
+
+    static firstLetterUpperCase(name: string) {
+        return name.substr(0, 1).toUpperCase() + name.substr(1).toLowerCase()
+    }
 }
 
 export default StringUtils;

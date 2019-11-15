@@ -60,7 +60,9 @@ class KotlinLanguageDefinition extends LanguageDefinition {
         }
         let constructor = '';
         if (constructors && constructors.length > 0) {
-            constructor = this.constructorProperties(constructors[0].properties);
+            if (!constructors[0].body) {
+                constructor = this.constructorProperties(constructors[0].properties);
+            }
         }
         let inherits = '';
         if (inheritsFrom) {
@@ -320,6 +322,10 @@ ${body}
             nullable = '?';
         }
         return `${property.name}${nullable}`;
+    }
+
+    appendString(stringVariable: string, stringToAppend: string): string {
+        return `${stringVariable} + ${stringToAppend}`;
     }
 }
 

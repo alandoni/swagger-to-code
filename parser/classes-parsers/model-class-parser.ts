@@ -1,15 +1,15 @@
-import LanguageDefinition from "../languages/language-definition";
-import { DefinitionHelper, DefinitionTypeHelper, DefinitionPropertyHelper } from "./yaml-definition-to-definition-helper-converter";
-import ClassDefinition from "./definitions/class-definition";
-import ConstructorDefinition from "./definitions/constructor-definition";
-import ParameterDefinition from "./definitions/parameter-definition";
-import PropertyDefinition from "./definitions/property-definition";
-import TypeDefinition from "./definitions/type-definition";
-import EnumDefinition from "./definitions/enum-definition";
-import MethodDefinition from "./definitions/method-definition";
-import Parser from "./parser-interface";
-import { ClassSettings } from "../configuration";
-import { YamlType } from "./swagger-objects-representation/definition";
+import LanguageDefinition from "../../languages/language-definition";
+import { DefinitionHelper, DefinitionTypeHelper, DefinitionPropertyHelper } from "../yaml-definition-to-definition-helper-converter";
+import ClassDefinition from "../definitions/class-definition";
+import ConstructorDefinition from "../definitions/constructor-definition";
+import ParameterDefinition from "../definitions/parameter-definition";
+import PropertyDefinition from "../definitions/property-definition";
+import TypeDefinition from "../definitions/type-definition";
+import EnumDefinition from "../definitions/enum-definition";
+import MethodDefinition from "../definitions/method-definition";
+import Parser from "../parser-interface";
+import { ClassSettings } from "../../configuration";
+import { YamlType } from "../swagger-objects-representation/definition";
 
 export default class ModelClassParser implements Parser {
     languageDefinition: LanguageDefinition;
@@ -39,20 +39,12 @@ export default class ModelClassParser implements Parser {
             return TypeDefinition.typeBySplittingPackageAndName(interfaceString, className);
         });
 
-        let dependencies = ModelClassParser.parseDependencies(this.definition, this.configuration);
-        dependencies = [
-            'java.util.Objects',
-            inherits ? inherits.package : null,
-            ...implementsInterfaces.map((interfaceType) => {
-                return interfaceType.package;
-            }),
-            ...dependencies,
-        ].filter((dependency) => {
-            return dependency !== null;
-        });
+        let dependencies = this.parseDependencies(inherits, implementsInterfaces);
 
-        const methods = [this.getCopyMethod(properties),
-            this.getIsEqualMethod(properties)];
+        const methods = [
+            this.getCopyMethod(properties),
+            this.getIsEqualMethod(properties)
+        ];
 
         if (this.languageDefinition.hashCodeMethodName) {
             methods.push(this.getHashCodeMethod(properties));
@@ -68,9 +60,19 @@ export default class ModelClassParser implements Parser {
         return classDefinition;
     }
 
-    static parseDependencies(definition: DefinitionHelper, configuration: ClassSettings): Array<string> {
-        return definition.references.map((reference) => {
-            return `${configuration.package}.${reference.definition.name}`;
+    parseDependencies(inherits: TypeDefinition, implementsInterfaces: Array<TypeDefinition>): Array<string> {
+        const dependenciesOfRefs = this.definition.references.map((reference) => {
+            return `${this.configuration.package}.${reference.definition.name}`;
+        });
+        return [
+            'java.util.Objects',
+            inherits ? inherits.package : null,
+            ...implementsInterfaces.map((interfaceType) => {
+                return interfaceType.package;
+            }),
+            ...dependenciesOfRefs,
+        ].filter((dependency) => {
+            return dependency !== null;
         });
     }
 

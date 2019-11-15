@@ -22,7 +22,11 @@ class StringUtils {
     }
 
     static firstLetterUpperCase(name: string) {
-        return name.substr(0, 1).toUpperCase() + name.substr(1).toLowerCase()
+        return name.substr(0, 1).toUpperCase() + name.substr(1).toLowerCase();
+    }
+
+    static firstLetterLowerCase(name: string) {
+        return name.substr(0, 1).toLowerCase() + name.substr(1);
     }
 }
 

@@ -37,9 +37,12 @@ class ClassDefinition implements PrintableLanguageElements {
         const imports = languageDefinition.importDeclarations(this.dependencies);
 
         let constructors = '';
+        let constructorsWithBody = this.constructors.filter((construct) => {
+            return construct.body;
+        });
 
         if (!languageDefinition.constructorAlsoDeclareFields && this.constructors) {
-            constructors = this.constructors.map((construct) => {
+            constructors = constructorsWithBody.map((construct) => {
                 if (this.inheritsFrom && !languageDefinition.constructorAlsoDeclareFields) {
                     construct.body = `\t\t${languageDefinition.emptySuperMethod}\n${construct.body}`;
                 }
@@ -56,16 +59,16 @@ class ClassDefinition implements PrintableLanguageElements {
 
         let properties = '';
         let methods = this.methods;
-        if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
-            if (languageDefinition.needDeclareFields || !this.isDataClass) {
+        if (!languageDefinition.useDataclassForModels) {
+            if (languageDefinition.needDeclareFields) {
                 properties = this.properties.map((property) => {
                     return `\t${property.print(languageDefinition)}`;
                 }).join('\n\n');
             }
+        }
 
-            if (this.constructors) {
-                methods = [...this.constructors, ...this.methods];
-            }
+        if (constructorsWithBody && constructorsWithBody.length > 0) {
+            methods = [...constructorsWithBody, ...this.methods];
         }
 
         const methodsString = methods.map((method) => {
@@ -78,7 +81,7 @@ class ClassDefinition implements PrintableLanguageElements {
 
         let modelClassString;
         if (!languageDefinition.useDataclassForModels || !this.isDataClass) {
-            modelClassString = languageDefinition.classDeclaration(this.name, this.inheritsFrom, this.implements, classBody, false, null);
+            modelClassString = languageDefinition.classDeclaration(this.name, this.inheritsFrom, this.implements, classBody, false, this.constructors);
         } else{
             modelClassString = languageDefinition.classDeclaration(this.name, this.inheritsFrom, this.implements, classBody, true, this.constructors);
         }

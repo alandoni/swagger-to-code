@@ -100,6 +100,8 @@ abstract class LanguageDefinition {
     abstract callProperty(caller: PropertyDefinition, property: PropertyDefinition, insertNullable: boolean): string;
 
     abstract printPropertyValue(property: PropertyDefinition, insertNullable: boolean): string;
+
+    abstract appendString(stringVariable: string, stringToAppend): string;
 }
 
 export default LanguageDefinition;

@@ -1,7 +1,7 @@
 import { LanguageSettings } from '../configuration';
 import LanguageDefinition from '../languages/language-definition';
 import { YamlPath, YamlTag, YamlPathParameter, YamlPathResponse, YamlType, YamlProperty, YamlDefinition } from './swagger-objects-representation/definition';
-import { DefinitionHelper } from './yaml-definition-to-definition-helper-converter';
+import { DefinitionHelper, DefinitionPropertyHelper } from './yaml-definition-to-definition-helper-converter';
 import StringUtils from '../string-utils';
 
 export default class YamlPathsToApiHelperConverter {
@@ -9,7 +9,7 @@ export default class YamlPathsToApiHelperConverter {
     configuration: LanguageSettings;
     tags: Map<string, YamlTag> = new Map();
 
-    convert(object: any, definitions: Map<string, DefinitionHelper>, language: LanguageDefinition, configuration: LanguageSettings): Array<YamlPath> {
+    convert(object: any, definitions: Map<string, DefinitionHelper>, language: LanguageDefinition, configuration: LanguageSettings): Array<PathHelper> {
         this.configuration = configuration;
         this.languageDefinition = language;
 
@@ -78,12 +78,13 @@ class PathHelper {
     url: string;
     method: string;
     tag: YamlTag;
-    urlRequestDefinition: YamlType;
-    requestDefinition: YamlType;
+    urlRequestDefinition: DefinitionPropertyHelper;
+    requestDefinition: DefinitionPropertyHelper;
     successResponseDefinition: YamlType;
     failureResponseDefinition: YamlType;
 
-    constructor(name: string, url: string, method: string, tag: YamlTag, urlRequestDefinition: YamlType, requestDefinition: YamlType, successResponseDefinition: YamlType, failureResponseDefinition: YamlType) {
+    constructor(name: string, url: string, method: string, tag: YamlTag, urlRequestDefinition: DefinitionPropertyHelper, 
+        requestDefinition: DefinitionPropertyHelper, successResponseDefinition: YamlType, failureResponseDefinition: YamlType) {
         this.name = name;
         this.url = url;
         this.method = method;
@@ -108,10 +109,10 @@ class PathHelper {
             param = StringUtils.firstLetterUpperCase(param);
             if (currentIndex > 1) {
                 if (!alreadyWrittenBy) {
-                    param = `By${param}`;
+                    param = `By${previous}${param}`;
                     alreadyWrittenBy = true;
                 } else if (regex.test(previous)) {
-                    param = `And${param}`;
+                    param = `And${previous}${param}`;
                 }
             }
             return previous + param;
@@ -125,13 +126,17 @@ class PathHelper {
             return param.type !== YamlPathParameter.TYPE_BODY;
         });
 
-        let urlRequestType: YamlType;
+        let urlRequestType: DefinitionPropertyHelper;
         if (urlRequestParameters && urlRequestParameters.length > 0) {
             if (urlRequestParameters.length === 1) {
-                urlRequestType = new YamlType(YamlType.TYPE_STRING);
+                urlRequestType = new DefinitionPropertyHelper(urlRequestParameters[0].name, new YamlType(YamlType.TYPE_STRING));
             } else {
                 const urlRequestDefinition = PathHelper.createDefinitionBasedOnUrlParameters(path, urlRequestParameters, definitions);
-                urlRequestType = new YamlType(urlRequestDefinition.name);
+                const name = StringUtils.firstLetterLowerCase(urlRequestDefinition.name);
+                const properties = urlRequestParameters.map((property) => {
+                    return new YamlProperty(property.name, new YamlType(YamlType.TYPE_STRING));
+                });
+                urlRequestType = new DefinitionPropertyHelper(name, new YamlType(urlRequestDefinition.name), false, properties, null, null);
             }
         }
 
@@ -139,9 +144,10 @@ class PathHelper {
             return param.type === YamlPathParameter.TYPE_BODY;
         });
 
-        let requestType: YamlType;
+        let requestType: DefinitionPropertyHelper;
         if (requestParameter && requestParameter.length > 0) {
-            requestType = PathHelper.getRequestTypeOrCreateDefinitionIfNeeded(path, '', requestParameter[0], definitions);
+            let name = StringUtils.firstLetterLowerCase(requestParameter[0].schema.type.name);
+            requestType = new DefinitionPropertyHelper(name, PathHelper.getRequestTypeOrCreateDefinitionIfNeeded(path, '', requestParameter[0], definitions));
         }
         
         const successResponseDefinitions = path.responses.filter((response) => {

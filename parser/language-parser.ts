@@ -1,8 +1,8 @@
 
 import LanguageDefinition from '../languages/language-definition';
 
-import ModelClassParser from './model-class-parser';
-import DatabaseTableSchemaClassParser from './database-table-schema-class-parser';
+import ModelClassParser from './classes-parsers/model-class-parser';
+import DatabaseTableSchemaClassParser from './classes-parsers/database-table-schema-class-parser';
 
 import SqliteLanguageDefinition from '../languages/sqlite-language-definition';
 import { TypeOfClass, Configuration, LanguageSettings } from '../configuration';
@@ -12,6 +12,7 @@ import Parser from './parser-interface';
 import YamlDefinitionToDefinitionHelperConverter from './yaml-definition-to-definition-helper-converter';
 
 import YamlPathsToApiHelperConverter from './yaml-paths-to-api-helper-converter';
+import ApiClassParser from './classes-parsers/api-class-parser';
 
 export default class LanguageParser {
     
@@ -29,8 +30,6 @@ export default class LanguageParser {
         definitionConverter.convert(object, this.languageDefinition, this.configuration);
         const yamlPathsConverter = new YamlPathsToApiHelperConverter()
         const paths = yamlPathsConverter.convert(object, definitionConverter.preparedDefinitions, this.languageDefinition, this.configuration);
-        console.log(paths);
-        yamlPathsConverter.convertTags(object.tags);
 
         definitionConverter.definitions.forEach((definition) => {
             const modelParser = new ModelClassParser(
@@ -47,6 +46,11 @@ export default class LanguageParser {
                     definition, this.configuration);
                 classes.push(this.createClassFile(tableSchemaParser, TypeOfClass.DATABASE_CLASSES));
             }
+        });
+
+        paths.forEach((path) => {
+            const apiParser = new ApiClassParser(this.languageDefinition, path, this.configuration);
+            classes.push(this.createClassFile(apiParser, TypeOfClass.API_CLASSES));
         });
 
         return classes;

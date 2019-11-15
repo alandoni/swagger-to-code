@@ -1,18 +1,18 @@
-import LanguageDefinition from "../languages/language-definition";
-import SqliteLanguageDefinition from "../languages/sqlite-language-definition";
-import { DefinitionHelper, DefinitionReferenceHelper, RelationshipType, DefinitionPropertyHelper, DefinitionTypeHelper } from "./yaml-definition-to-definition-helper-converter";
-import ParameterDefinition from "./definitions/parameter-definition";
-import TypeDefinition from "./definitions/type-definition";
-import PropertyDefinition from "./definitions/property-definition";
-import StringUtils from "../string-utils";
-import ClassDefinition from "./definitions/class-definition";
-import MethodDefinition from "./definitions/method-definition";
-import Parser from "./parser-interface";
-import { LanguageSettings, TypeOfClass } from "../configuration";
-import Languages from "../languages/languages";
-import KotlinClassDefinition from "./definitions/kotlin-class-definition";
-import { YamlType } from "./swagger-objects-representation/definition";
-import ArrayUtils from "../array-utils";
+import LanguageDefinition from "../../languages/language-definition";
+import SqliteLanguageDefinition from "../../languages/sqlite-language-definition";
+import { DefinitionHelper, DefinitionReferenceHelper, RelationshipType, DefinitionPropertyHelper, DefinitionTypeHelper } from "../yaml-definition-to-definition-helper-converter";
+import ParameterDefinition from "../definitions/parameter-definition";
+import TypeDefinition from "../definitions/type-definition";
+import PropertyDefinition from "../definitions/property-definition";
+import StringUtils from "../../string-utils";
+import ClassDefinition from "../definitions/class-definition";
+import MethodDefinition from "../definitions/method-definition";
+import Parser from "../parser-interface";
+import { LanguageSettings, TypeOfClass } from "../../configuration";
+import Languages from "../../languages/languages";
+import KotlinClassDefinition from "../definitions/kotlin-class-definition";
+import { YamlType } from "../swagger-objects-representation/definition";
+import ArrayUtils from "../../array-utils";
 
 export default class DatabaseTableSchemaClassParser implements Parser {
     static STRING_TO_ARRAY_SEPARATOR = ';';

@@ -243,6 +243,10 @@ ${parameters.map((value) => {
     printPropertyValue(property: PropertyDefinition, _insertNullable: boolean = false): string {
         return `${property.name}`;
     }
+
+    appendString(stringVariable: string, stringToAppend: string): string {
+        return `${stringVariable} + ${stringToAppend}`;
+    }
 }
 
 export default JavascriptLanguageDefinition;

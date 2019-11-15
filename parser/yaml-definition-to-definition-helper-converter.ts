@@ -1,6 +1,6 @@
 import LanguageDefinition from '../languages/language-definition';
 
-import ModelClassParser from './model-class-parser';
+import ModelClassParser from './classes-parsers/model-class-parser';
 import { YamlDefinition, YamlProperty, YamlType, YamlTag } from './swagger-objects-representation/definition';
 import { LanguageSettings } from '../configuration';
 
@@ -183,7 +183,8 @@ class DefinitionPropertyHelper {
     subProperties: Array<DefinitionPropertyHelper>;
     refersTo: DefinitionReferenceHelper;
     
-    constructor(name: string, type: YamlType, required: boolean, subProperties: Array<YamlProperty>, defaultValue: string, enumValues: Array<string>) {
+    constructor(name: string, type: YamlType, required: boolean = true, subProperties: Array<YamlProperty> = null, 
+        defaultValue: string = null, enumValues: Array<string> = null) {
         this.name = name;
         this.type = DefinitionTypeHelper.fromYamlType(type);
         this.required = required;

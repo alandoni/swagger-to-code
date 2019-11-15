@@ -12,6 +12,11 @@
           "implementsInterfaces": [],
           "module": "data",
           "package": "com.adqmobile.data.database"
+        },
+        "API_CLASSES": {
+          "implementsInterfaces": [],
+          "module": "data",
+          "package": "com.adqmobile.data.api"
         }
       },
       "language": "KOTLIN",
